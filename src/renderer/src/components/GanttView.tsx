@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Gantt, Willow, type IApi } from '@svar-ui/react-gantt'
 import '@svar-ui/react-gantt/all.css'
-import type { GanttLink, GanttTask, TimelineMode, TimelineUnit } from '../types'
+import type { GanttLink, GanttTask, TimelineMode, TimelineZoom } from '../types'
 import type { GanttChartActions } from '../lib/ganttActions'
-import { addFsDependency, applyFsScheduling, coerceTaskId, FS_LINK_TYPE, removeFsDependency } from '../lib/dependencies'
+import { addFsDependency, applyFsScheduling, coerceTaskId, FS_LINK_TYPE, removeFsDependency, taskDatesDiffer } from '../lib/dependencies'
 import {
   asDate,
   fromCalendarTasks,
@@ -12,25 +12,39 @@ import {
   TIMELINE_EPOCH,
   toCalendarTasks
 } from '../lib/timeline'
+import {
+  autofitChart,
+  buildZoomConfig,
+  defaultChartRange,
+  levelToZoomPreset,
+  ZOOM_LEVEL_ORDER,
+  ZOOM_PRESET_LABELS,
+  ZOOM_PRESETS,
+  zoomPresetToLevel,
+  zoomPresetToTimelineUnit
+} from '../lib/ganttZoom'
 import { parseISO } from 'date-fns'
 import { useDragToLink } from '../hooks/useDragToLink'
 import { LinkDragOverlay } from './LinkDragOverlay'
+import { AddRowCell } from './AddRowCell'
+import { MilestoneToggleCell } from './MilestoneToggleCell'
+import { nextTaskId } from '../lib/document'
+import { defaultNewTaskStart, normalizeMilestoneTaskPatch, tasksChanged } from '../lib/tasks'
+import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
 
 interface GanttViewProps {
   tasks: GanttTask[]
   links: GanttLink[]
-  timelineUnit: TimelineUnit
+  timelineZoom: TimelineZoom
   timelineMode: TimelineMode
   projectStartDate: string
-  onTimelineUnitChange: (unit: TimelineUnit) => void
+  onTimelineZoomChange: (zoom: TimelineZoom) => void
   onTimelineModeChange: (mode: TimelineMode) => void
   onTasksChange: (tasks: GanttTask[]) => void
   onLinksChange: (links: GanttLink[]) => void
   onRegisterChartActions?: (actions: GanttChartActions) => void
   chartDocumentKey: string
 }
-
-const TIMELINE_UNITS: TimelineUnit[] = ['day', 'month', 'year']
 
 const SYNC_EVENTS = [
   'update-task',
@@ -42,21 +56,13 @@ const SYNC_EVENTS = [
   'move-task'
 ] as const
 
-function tasksDiffer(prev: GanttTask[], next: GanttTask[]): boolean {
-  return next.some((task) => {
-    const prior = prev.find((t) => String(t.id) === String(task.id))
-    if (!prior) return true
-    return asDate(prior.start).getTime() !== asDate(task.start).getTime()
-  })
-}
-
 export function GanttView({
   tasks,
   links,
-  timelineUnit,
+  timelineZoom,
   timelineMode,
   projectStartDate,
-  onTimelineUnitChange,
+  onTimelineZoomChange,
   onTimelineModeChange,
   onTasksChange,
   onLinksChange,
@@ -70,10 +76,17 @@ export function GanttView({
   const skipApiSync = useRef(false)
   const tasksBeforeEditRef = useRef<GanttTask[] | null>(null)
   const movedTaskIdRef = useRef<number | string | null>(null)
+  const dragHadResizeRef = useRef(false)
+  const dragInitialWidthRef = useRef<number | null>(null)
   const [linkMode, setLinkMode] = useState(false)
   const [linkMessage, setLinkMessage] = useState<string | null>(null)
+  const [chartRange, setChartRange] = useState<{ start: Date; end: Date }>(() =>
+    defaultChartRange(tasks, timelineMode, projectStartDate)
+  )
 
-  const ganttKey = `${chartDocumentKey}-${timelineUnit}-${timelineMode}-${projectStartDate}`
+  const timelineUnit = zoomPresetToTimelineUnit(timelineZoom)
+
+  const ganttKey = `${chartDocumentKey}-${timelineMode}-${projectStartDate}-${timelineZoom}`
 
   const onTasksChangeRef = useRef(onTasksChange)
   const onLinksChangeRef = useRef(onLinksChange)
@@ -88,13 +101,58 @@ export function GanttView({
     [tasks, timelineMode, projectStartDate]
   )
 
+  const zoomConfig = useMemo(
+    () => buildZoomConfig(timelineMode, timelineZoom),
+    [timelineMode, timelineZoom]
+  )
+
   const scales = useMemo(
     () => getTimelineScales(timelineUnit, timelineMode),
     [timelineUnit, timelineMode]
   )
-  const columns = useMemo(
-    () => getTimelineColumns(timelineUnit, timelineMode),
-    [timelineUnit, timelineMode]
+
+  useEffect(() => {
+    setChartRange(defaultChartRange(tasks, timelineMode, projectStartDate))
+  }, [chartDocumentKey, timelineMode, projectStartDate])
+
+  const columns = useMemo(() => {
+    const [taskCol, ...rest] = getTimelineColumns(timelineUnit, timelineMode)
+    return [
+      taskCol,
+      {
+        id: 'milestone-toggle',
+        header: '◆',
+        width: 36,
+        align: 'center' as const,
+        resize: false,
+        cell: MilestoneToggleCell
+      },
+      ...rest,
+      {
+        id: 'add-task',
+        header: '',
+        width: 56,
+        align: 'center' as const,
+        resize: false,
+        cell: AddRowCell
+      }
+    ]
+  }, [timelineUnit, timelineMode])
+
+  const handleAutofit = useCallback(() => {
+    const { range, preset } = autofitChart(ganttTasks)
+    setChartRange(range)
+    onTimelineZoomChange(preset)
+  }, [ganttTasks, onTimelineZoomChange])
+
+  const handleZoomStep = useCallback(
+    (dir: 1 | -1) => {
+      const currentLevel = zoomPresetToLevel(timelineZoom)
+      const nextLevel = Math.min(Math.max(currentLevel + dir, 0), ZOOM_LEVEL_ORDER.length - 1)
+      if (nextLevel === currentLevel) return
+      onTimelineZoomChange(levelToZoomPreset(nextLevel))
+    },
+    [onTimelineZoomChange, timelineZoom]
   )
 
   const pushTaskUpdatesToChart = useCallback(
@@ -172,82 +230,137 @@ export function GanttView({
     void applyFsLink(coerceTaskId(sourceId), coerceTaskId(targetId))
   })
 
-  const syncFromApi = useCallback(
-    async (api: IApi) => {
-      const { links, timelineMode: mode, projectStartDate: start } = dataRef.current
-      const prevTasks = tasksBeforeEditRef.current ?? dataRef.current.tasks
-      tasksBeforeEditRef.current = null
+  const syncFromApi = useCallback(async (api: IApi) => {
+    const { links, timelineMode: mode, projectStartDate: start } = dataRef.current
+    const prevTasks = tasksBeforeEditRef.current ?? dataRef.current.tasks
+    tasksBeforeEditRef.current = null
 
-      let nextTasks = api.serialize({ data: 'tasks' }) as GanttTask[] | null
+    let nextTasks = api.serialize({ data: 'tasks' }) as GanttTask[] | null
+    if (!nextTasks) return
 
-      if (!nextTasks) return
+    if (mode === 'calendar') {
+      nextTasks = fromCalendarTasks(nextTasks, start)
+    }
 
-      if (mode === 'calendar') {
-        nextTasks = fromCalendarTasks(nextTasks, start)
-      }
+    const barMove = !dragHadResizeRef.current
+    dragHadResizeRef.current = false
+    dragInitialWidthRef.current = null
 
-      const { tasks: scheduledTasks, links: scheduledLinks } = applyFsScheduling(
-        prevTasks,
-        nextTasks,
-        links,
-        movedTaskIdRef.current
-      )
-      movedTaskIdRef.current = null
+    const movedId = movedTaskIdRef.current ?? undefined
+    movedTaskIdRef.current = null
 
-      const tasksNeedingChartUpdate = scheduledTasks.filter((task) => {
-        const chartTask = nextTasks.find((t) => String(t.id) === String(task.id))
-        if (!chartTask) return false
-        return asDate(task.start).getTime() !== asDate(chartTask.start).getTime()
-      })
+    const { tasks: scheduledTasks, links: scheduledLinks } = applyFsScheduling(
+      prevTasks,
+      nextTasks,
+      links,
+      movedId,
+      { barMove }
+    )
 
-      if (tasksNeedingChartUpdate.length) {
-        skipApiSync.current = true
-        try {
-          for (const task of tasksNeedingChartUpdate) {
-            const chartTask =
-              mode === 'calendar' ? toCalendarTasks([task], start)[0] : task
-            await api.exec('update-task', {
-              id: task.id,
-              task: {
-                start: chartTask.start,
-                ...(chartTask.end ? { end: chartTask.end } : {})
-              }
-            })
-          }
-        } finally {
-          skipApiSync.current = false
+    const tasksNeedingChartUpdate = scheduledTasks.filter((task) => {
+      const chartTask = nextTasks.find((t) => String(t.id) === String(task.id))
+      if (!chartTask) return false
+      return taskDatesDiffer(task, chartTask)
+    })
+
+    if (tasksNeedingChartUpdate.length) {
+      skipApiSync.current = true
+      try {
+        for (const task of tasksNeedingChartUpdate) {
+          const chartTask =
+            mode === 'calendar' ? toCalendarTasks([task], start)[0] : task
+          await api.exec('update-task', {
+            id: task.id,
+            task: {
+              start: chartTask.start,
+              ...(chartTask.end ? { end: chartTask.end } : {})
+            }
+          })
         }
+      } finally {
+        skipApiSync.current = false
       }
+    }
 
-      if (tasksDiffer(dataRef.current.tasks, scheduledTasks)) {
-        onTasksChangeRef.current(scheduledTasks)
-      }
-      if (scheduledLinks !== links) onLinksChangeRef.current(scheduledLinks)
-    },
-    []
-  )
+    if (tasksChanged(dataRef.current.tasks, scheduledTasks)) {
+      onTasksChangeRef.current(scheduledTasks)
+    }
+    if (scheduledLinks !== links) onLinksChangeRef.current(scheduledLinks)
+  }, [])
 
   const handleInit = useCallback(
     (api: IApi) => {
       apiRef.current = api
 
-      api.intercept('update-task', (ev: { id?: number | string; inProgress?: boolean }) => {
+      api.intercept('add-task', (ev: {
+        id?: number | string
+        target?: number | string
+        mode?: 'before' | 'after' | 'child'
+        task?: Partial<GanttTask>
+      }) => {
         if (skipApiSync.current || skipLinkIntercept.current) return true
+
+        const { tasks } = dataRef.current
+        const newId = nextTaskId(tasks)
+        const isPhase = ev.task?.type === 'summary'
+        const mode =
+          ev.mode ?? (isPhase ? 'after' : tasks.find((t) => String(t.id) === String(ev.target))?.type === 'summary' ? 'child' : 'after')
+
+        ev.id = newId
+        ev.mode = mode
+        ev.task = {
+          type: isPhase ? 'summary' : 'task',
+          text: isPhase ? 'New Phase' : 'New Task',
+          duration: isPhase ? 14 : 3,
+          progress: 0,
+          open: isPhase ? true : undefined,
+          start: defaultNewTaskStart(tasks, ev.target, mode),
+          ...ev.task,
+          id: newId
+        }
+        return true
+      })
+
+      api.intercept('update-task', (ev: {
+        id?: number | string
+        inProgress?: boolean
+        task?: Partial<GanttTask>
+      }) => {
+        if (skipApiSync.current || skipLinkIntercept.current) return true
+
+        if (ev.task && ev.id != null) {
+          ev.task = normalizeMilestoneTaskPatch(ev.id, ev.task, dataRef.current.tasks)
+        }
+
         if (ev.inProgress) {
           if (!tasksBeforeEditRef.current) {
             tasksBeforeEditRef.current = structuredClone(dataRef.current.tasks)
           }
           if (ev.id != null) movedTaskIdRef.current = ev.id
-        } else if (ev.id != null) {
-          movedTaskIdRef.current = ev.id
         }
         return true
       })
 
-      api.on('drag-task', (ev: { id?: number | string; inProgress?: boolean }) => {
-        if (ev.inProgress && !skipApiSync.current) {
-          tasksBeforeEditRef.current = structuredClone(dataRef.current.tasks)
+      api.on('drag-task', (ev: {
+        id?: number | string
+        inProgress?: boolean
+        width?: number
+      }) => {
+        if (skipApiSync.current) return
+        if (ev.inProgress) {
+          if (!tasksBeforeEditRef.current) {
+            tasksBeforeEditRef.current = structuredClone(dataRef.current.tasks)
+            dragHadResizeRef.current = false
+            dragInitialWidthRef.current = null
+          }
           if (ev.id != null) movedTaskIdRef.current = ev.id
+          if (typeof ev.width !== 'undefined') {
+            if (dragInitialWidthRef.current === null) {
+              dragInitialWidthRef.current = ev.width
+            } else if (ev.width !== dragInitialWidthRef.current) {
+              dragHadResizeRef.current = true
+            }
+          }
         }
       })
 
@@ -308,9 +421,6 @@ export function GanttView({
     [syncFromApi]
   )
 
-  const chartStart =
-    timelineMode === 'calendar' ? parseISO(projectStartDate) : TIMELINE_EPOCH
-
   return (
     <div
       className={`gantt-chart proposal-gantt-theme${linkMode ? ' link-mode-active' : ''}${drag ? ' link-dragging' : ''}`}
@@ -335,17 +445,47 @@ export function GanttView({
 
         <span className="toolbar-divider" />
 
-        <div className="timeline-unit-toggle" role="group" aria-label="Timeline scale">
-          {TIMELINE_UNITS.map((unit) => (
-            <button
-              key={unit}
-              type="button"
-              className={`gantt-tool-btn${timelineUnit === unit ? ' is-active' : ''}`}
-              onClick={() => onTimelineUnitChange(unit)}
-            >
-              {unit.charAt(0).toUpperCase() + unit.slice(1)}s
-            </button>
-          ))}
+        <div className="gantt-zoom-controls" role="group" aria-label="Timeline zoom">
+          <button
+            type="button"
+            className="gantt-tool-btn gantt-tool-icon"
+            onClick={() => handleZoomStep(-1)}
+            title="Zoom out"
+            aria-label="Zoom out"
+          >
+            <ZoomOut size={15} strokeWidth={2} />
+          </button>
+          <div className="timeline-unit-toggle" role="group" aria-label="Zoom preset">
+            {ZOOM_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                className={`gantt-tool-btn${timelineZoom === preset ? ' is-active' : ''}`}
+                onClick={() => onTimelineZoomChange(preset)}
+                title={ZOOM_PRESET_LABELS[preset]}
+              >
+                {ZOOM_PRESET_LABELS[preset]}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="gantt-tool-btn gantt-tool-icon"
+            onClick={() => handleZoomStep(1)}
+            title="Zoom in"
+            aria-label="Zoom in"
+          >
+            <ZoomIn size={15} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            className="gantt-tool-btn gantt-tool-icon"
+            onClick={handleAutofit}
+            title="Fit timeline to tasks"
+            aria-label="Fit timeline to tasks"
+          >
+            <Maximize2 size={15} strokeWidth={2} />
+          </button>
         </div>
 
         <span className="toolbar-divider" />
@@ -358,13 +498,8 @@ export function GanttView({
             setLinkMessage(null)
           }}
         >
-          {linkMode ? 'Link mode on' : 'Link mode off'}
+          {linkMode ? 'Linking' : 'Link'}
         </button>
-        <span className="gantt-tool-hint">
-          {linkMode
-            ? 'Link mode: hover a task, then drag right dot → left dot.'
-            : 'Drag task bars to reschedule. Linked tasks keep their gap.'}
-        </span>
         {linkMessage && <span className="gantt-tool-error">{linkMessage}</span>}
       </div>
 
@@ -377,7 +512,11 @@ export function GanttView({
             links={links}
             scales={scales}
             columns={columns}
-            start={chartStart}
+            start={chartRange.start}
+            end={chartRange.end}
+            zoom={zoomConfig}
+            autoScale={false}
+            weekStart={1}
             init={handleInit}
           />
         </Willow>

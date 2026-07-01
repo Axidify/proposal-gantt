@@ -1,5 +1,6 @@
 export type TimelineUnit = 'day' | 'month' | 'year'
 export type TimelineMode = 'relative' | 'calendar'
+export type TimelineZoom = 'hour' | 'day' | 'week' | 'month' | 'year'
 
 export interface ProposalMeta {
   title: string
@@ -8,6 +9,7 @@ export interface ProposalMeta {
   date: string
   notes: string
   timelineUnit?: TimelineUnit
+  timelineZoom?: TimelineZoom
   timelineMode?: TimelineMode
   projectStartDate?: string
 }

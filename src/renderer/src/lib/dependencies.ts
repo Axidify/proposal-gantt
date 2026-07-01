@@ -100,6 +100,26 @@ function setTaskStart(tasks: GanttTask[], taskId: number | string, start: Date):
   })
 }
 
+/** Derive end from start + duration when the chart reports a stale end after drag. */
+function normalizeTaskDates(task: GanttTask): GanttTask {
+  const start = asDate(task.start)
+  const duration = task.duration ?? 0
+  if (task.type === 'milestone' || duration === 0) {
+    return { ...task, start, end: start }
+  }
+  return { ...task, start, end: addDays(start, duration) }
+}
+
+/** Finish pinned but start moved — restore a whole-bar move using the prior duration. */
+function correctBarMoveDates(oldTask: GanttTask, currentTask: GanttTask): GanttTask {
+  const start = asDate(currentTask.start)
+  const duration = oldTask.duration ?? 0
+  if (currentTask.type === 'milestone' || duration === 0) {
+    return { ...currentTask, start, end: start, duration: 0 }
+  }
+  return { ...currentTask, start, end: addDays(start, duration), duration }
+}
+
 function getTransitiveSuccessorIds(links: GanttLink[], rootId: number | string): (number | string)[] {
   const result: (number | string)[] = []
   const seen = new Set<string>()
@@ -131,7 +151,9 @@ function shiftSuccessorAfterPredecessor(
   if (!source || !target || target.type === 'summary') return tasks
 
   const requiredStart = addDays(getTaskEnd(source), lag)
-  if (asDate(target.start) >= requiredStart) return tasks
+  const targetStart = asDate(target.start)
+  if (targetStart.getTime() === requiredStart.getTime()) return tasks
+  if (targetStart > requiredStart) return tasks
   return setTaskStart(tasks, targetId, requiredStart)
 }
 
@@ -196,12 +218,44 @@ function cascadeSuccessorsByDays(
 }
 
 function findMovedTaskId(prevTasks: GanttTask[], nextTasks: GanttTask[]): number | string | null {
+  let best: { id: number | string; delta: number } | null = null
   for (const next of nextTasks) {
     const prev = prevTasks.find((t) => String(t.id) === String(next.id))
     if (!prev) continue
-    if (asDate(prev.start).getTime() !== asDate(next.start).getTime()) return next.id
+    const delta = Math.abs(differenceInCalendarDays(asDate(next.start), asDate(prev.start)))
+    if (delta === 0) continue
+    if (!best || delta > best.delta) best = { id: next.id, delta }
   }
-  return null
+  return best?.id ?? null
+}
+
+function shiftOutboundSuccessorsWithPredecessor(
+  tasks: GanttTask[],
+  links: GanttLink[],
+  movedId: number | string,
+  oldTask: GanttTask,
+  allowBarMoveCorrection: boolean
+): GanttTask[] {
+  const normalizedOld = normalizeTaskDates(oldTask)
+  let movedTask = normalizeTaskDates(tasks.find((t) => String(t.id) === String(movedId))!)
+
+  const startDelta = differenceInCalendarDays(asDate(movedTask.start), asDate(normalizedOld.start))
+  let endDelta = differenceInCalendarDays(getTaskEnd(movedTask), getTaskEnd(normalizedOld))
+
+  if (allowBarMoveCorrection && startDelta !== 0 && endDelta === 0) {
+    movedTask = correctBarMoveDates(normalizedOld, movedTask)
+    endDelta = differenceInCalendarDays(getTaskEnd(movedTask), getTaskEnd(normalizedOld))
+  }
+
+  let result = tasks.map((t) => (String(t.id) === String(movedId) ? movedTask : t))
+  const shiftDays =
+    endDelta !== 0 ? endDelta : allowBarMoveCorrection && startDelta !== 0 ? startDelta : 0
+
+  if (shiftDays !== 0) {
+    result = cascadeSuccessorsByDays(result, links, movedId, shiftDays)
+  }
+
+  return result
 }
 
 export function reconcileAllFsConstraints(tasks: GanttTask[], links: GanttLink[]): GanttTask[] {
@@ -231,12 +285,25 @@ export function reconcileAllFsConstraints(tasks: GanttTask[], links: GanttLink[]
   return result
 }
 
+export interface FsSchedulingOptions {
+  /** True when the user dragged the bar body (not resizing from an edge). */
+  barMove?: boolean
+}
+
+export function taskDatesDiffer(a: GanttTask, b: GanttTask): boolean {
+  if (asDate(a.start).getTime() !== asDate(b.start).getTime()) return true
+  const aEnd = a.end ? asDate(a.end).getTime() : null
+  const bEnd = b.end ? asDate(b.end).getTime() : null
+  return aEnd !== bEnd
+}
+
 /** Keep FS gaps when a task bar is dragged on the chart. */
 export function applyFsScheduling(
   prevTasks: GanttTask[],
   nextTasks: GanttTask[],
   links: GanttLink[],
-  movedIdHint?: number | string | null
+  movedIdHint?: number | string | null,
+  options: FsSchedulingOptions = {}
 ): { tasks: GanttTask[]; links: GanttLink[] } {
   const movedId = movedIdHint ?? findMovedTaskId(prevTasks, nextTasks)
   if (!movedId || !fsLinks(links).length) {
@@ -246,7 +313,7 @@ export function applyFsScheduling(
   const oldTask = prevTasks.find((t) => String(t.id) === String(movedId))
   if (!oldTask) return { tasks: nextTasks, links }
 
-  let tasks = nextTasks.map((t) => ({ ...t }))
+  let tasks = nextTasks.map((t) => normalizeTaskDates(t))
   let updatedLinks = links
 
   const hasInbound = fsLinks(links).some((l) => String(l.target) === String(movedId))
@@ -257,12 +324,17 @@ export function applyFsScheduling(
     updatedLinks = updateInboundLags(updatedLinks, tasks, movedId)
   }
 
-  const currentTask = tasks.find((t) => String(t.id) === String(movedId))!
-  const endDelta = differenceInCalendarDays(getTaskEnd(currentTask), getTaskEnd(oldTask))
   const hasOutbound = fsLinks(updatedLinks).some((l) => String(l.source) === String(movedId))
+  const allowBarMoveCorrection = options.barMove ?? false
 
-  if (endDelta !== 0 && hasOutbound) {
-    tasks = cascadeSuccessorsByDays(tasks, updatedLinks, movedId, endDelta)
+  if (hasOutbound) {
+    tasks = shiftOutboundSuccessorsWithPredecessor(
+      tasks,
+      updatedLinks,
+      movedId,
+      oldTask,
+      allowBarMoveCorrection
+    )
   }
 
   return { tasks: reconcileAllFsConstraints(tasks, updatedLinks), links: updatedLinks }

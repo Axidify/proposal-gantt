@@ -6,9 +6,10 @@ import type { GanttChartActions } from './lib/ganttActions'
 import { createBlankProposal, SAMPLE_PROPOSALS } from './lib/templates'
 import { documentTitle, parseDocument, reviveDocument, serializeDocument } from './lib/document'
 import { timelineModeLabel } from './lib/timeline'
+import { zoomPresetToTimelineUnit } from './lib/ganttZoom'
 import { applyTheme, type ThemeId } from './lib/themes'
 import { Header } from './components/Header'
-import { ProposalPanel } from './components/ProposalPanel'
+import { InspectorPanel } from './components/InspectorPanel'
 import { GanttView } from './components/GanttView'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import './styles/app.css'
@@ -18,6 +19,7 @@ export default function App() {
   const [filePath, setFilePath] = useState<string | undefined>()
   const [dirty, setDirty] = useState(false)
   const [theme, setTheme] = useState<ThemeId>('ocean')
+  const [inspectorOpen, setInspectorOpen] = useState(true)
   const [documentEpoch, setDocumentEpoch] = useState(0)
   const exportRef = useRef<HTMLDivElement>(null)
   const chartActionsRef = useRef<GanttChartActions | null>(null)
@@ -158,6 +160,8 @@ export default function App() {
         dirty={dirty}
         filePath={filePath}
         theme={theme}
+        inspectorOpen={inspectorOpen}
+        onInspectorToggle={() => setInspectorOpen((open) => !open)}
         onThemeChange={setTheme}
         onNew={handleNew}
         onOpen={() => void handleOpen()}
@@ -165,43 +169,53 @@ export default function App() {
         onExportPng={() => void captureExport('png')}
         onExportPdf={() => void captureExport('pdf')}
       />
-      <div className="workspace">
-        <ProposalPanel
-          document={document}
-          onChange={updateDocument}
-          onDirty={markDirty}
-          chartActionsRef={chartActionsRef}
-        />
-        <div className="gantt-area">
+      <div className={`workspace${inspectorOpen ? '' : ' inspector-collapsed'}`}>
+        {inspectorOpen && (
+          <InspectorPanel
+            document={document}
+            onChange={updateDocument}
+            onDirty={markDirty}
+            chartActionsRef={chartActionsRef}
+          />
+        )}
+        <main className="canvas">
           <div ref={exportRef} className="export-frame">
-            <div className="export-header">
-              <div>
+            <header className="export-header">
+              <div className="export-header-main">
                 <h2 className="export-title">{document.meta.title || 'Proposal Timeline'}</h2>
                 {document.meta.client && (
                   <p className="export-client">Prepared for {document.meta.client}</p>
                 )}
-                <p className="export-timeline">
+              </div>
+              <div className="export-meta">
+                <span className="export-timeline">
                   {timelineModeLabel(
                     document.meta.timelineMode ?? 'relative',
                     document.meta.timelineUnit ?? 'day',
-                    document.meta.projectStartDate
+                    document.meta.projectStartDate,
+                    document.meta.timelineZoom
                   )}
-                </p>
-              </div>
-              <div className="export-meta">
+                </span>
                 {document.meta.preparedBy && <span>{document.meta.preparedBy}</span>}
                 {document.meta.date && <span>{document.meta.date}</span>}
               </div>
-            </div>
+            </header>
             <GanttView
               chartDocumentKey={chartDocumentKey}
               tasks={document.tasks}
               links={document.links}
-              timelineUnit={document.meta.timelineUnit ?? 'day'}
+              timelineZoom={document.meta.timelineZoom ?? 'day'}
               timelineMode={document.meta.timelineMode ?? 'relative'}
               projectStartDate={document.meta.projectStartDate ?? ''}
-              onTimelineUnitChange={(unit) =>
-                updateDocument((d) => ({ ...d, meta: { ...d.meta, timelineUnit: unit } }))
+              onTimelineZoomChange={(zoom) =>
+                updateDocument((d) => ({
+                  ...d,
+                  meta: {
+                    ...d.meta,
+                    timelineZoom: zoom,
+                    timelineUnit: zoomPresetToTimelineUnit(zoom)
+                  }
+                }))
               }
               onTimelineModeChange={(mode) =>
                 updateDocument((d) => ({ ...d, meta: { ...d.meta, timelineMode: mode } }))
@@ -210,9 +224,9 @@ export default function App() {
               onLinksChange={handleLinksChange}
               onRegisterChartActions={handleRegisterChartActions}
             />
-            {document.meta.notes && <p className="export-notes">{document.meta.notes}</p>}
+            {document.meta.notes && <footer className="export-notes">{document.meta.notes}</footer>}
           </div>
-        </div>
+        </main>
       </div>
     </div>
   )

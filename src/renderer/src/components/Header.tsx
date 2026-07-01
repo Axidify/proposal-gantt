@@ -1,10 +1,12 @@
+import type { CSSProperties } from 'react'
 import {
   FilePlus2,
   FolderOpen,
   Save,
   ImageDown,
   FileText,
-  Palette
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react'
 import type { ThemeId } from '../lib/themes'
 import { THEMES } from '../lib/themes'
@@ -14,6 +16,8 @@ interface HeaderProps {
   dirty: boolean
   filePath?: string
   theme: ThemeId
+  inspectorOpen: boolean
+  onInspectorToggle: () => void
   onThemeChange: (theme: ThemeId) => void
   onNew: () => void
   onOpen: () => void
@@ -27,6 +31,8 @@ export function Header({
   dirty,
   filePath,
   theme,
+  inspectorOpen,
+  onInspectorToggle,
   onThemeChange,
   onNew,
   onOpen,
@@ -39,57 +45,74 @@ export function Header({
   return (
     <header className="app-header">
       <div className="header-drag" />
-      <div className="header-brand">
-        <div className="brand-mark" />
-        <div>
-          <span className="brand-name">Proposal Gantt</span>
+
+      <div className="header-start">
+        <button
+          type="button"
+          className="btn btn-icon btn-quiet"
+          onClick={onInspectorToggle}
+          title={inspectorOpen ? 'Hide inspector' : 'Show inspector'}
+          aria-expanded={inspectorOpen}
+        >
+          {inspectorOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
+        </button>
+        <div className="brand-mark" aria-hidden="true" />
+        <div className="header-titles">
           <span className="doc-title">
             {title}
-            {dirty ? ' •' : ''}
+            {dirty && <span className="dirty-dot" aria-label="Unsaved changes" />}
           </span>
+          <span className="doc-path">{fileName ?? 'Unsaved proposal'}</span>
         </div>
       </div>
 
       <div className="header-actions">
-        <button type="button" className="btn btn-ghost" onClick={onNew} title="New (⌘N)">
-          <FilePlus2 size={16} />
-          New
-        </button>
-        <button type="button" className="btn btn-ghost" onClick={onOpen} title="Open (⌘O)">
-          <FolderOpen size={16} />
-          Open
-        </button>
-        <button type="button" className="btn btn-ghost" onClick={onSave} title="Save (⌘S)">
-          <Save size={16} />
-          Save
-        </button>
+        <div className="action-group" role="group" aria-label="File">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onNew} title="New (⌘N)">
+            <FilePlus2 size={15} />
+            <span className="btn-label">New</span>
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onOpen} title="Open (⌘O)">
+            <FolderOpen size={15} />
+            <span className="btn-label">Open</span>
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onSave} title="Save (⌘S)">
+            <Save size={15} />
+            <span className="btn-label">Save</span>
+          </button>
+        </div>
 
-        <span className="header-divider" />
+        <div className="header-divider" aria-hidden="true" />
 
-        <button type="button" className="btn btn-ghost" onClick={onExportPng}>
-          <ImageDown size={16} />
-          PNG
-        </button>
-        <button type="button" className="btn btn-primary" onClick={onExportPdf}>
-          <FileText size={16} />
-          Export PDF
-        </button>
+        <div className="action-group" role="group" aria-label="Export">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onExportPng}>
+            <ImageDown size={15} />
+            <span className="btn-label">PNG</span>
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={onExportPdf}>
+            <FileText size={15} />
+            <span className="btn-label">Export PDF</span>
+          </button>
+        </div>
 
-        <span className="header-divider" />
+        <div className="header-divider" aria-hidden="true" />
 
-        <label className="theme-picker">
-          <Palette size={16} />
-          <select value={theme} onChange={(e) => onThemeChange(e.target.value as ThemeId)}>
-            {THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="theme-swatches" role="radiogroup" aria-label="Accent color">
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="radio"
+              aria-checked={theme === t.id}
+              aria-label={t.name}
+              className={`theme-swatch${theme === t.id ? ' is-active' : ''}`}
+              title={t.name}
+              style={{ '--swatch': t.accent } as CSSProperties}
+              onClick={() => onThemeChange(t.id)}
+            />
+          ))}
+        </div>
       </div>
-
-      {fileName && <span className="file-badge">{fileName}</span>}
     </header>
   )
 }

@@ -9,13 +9,16 @@ interface DependenciesPanelProps {
   onChange: (updater: (prev: ProposalDocument) => ProposalDocument) => void
   onDirty: () => void
   chartActionsRef: RefObject<GanttChartActions | null>
+  /** Render without outer section chrome when inside InspectorPanel. */
+  embedded?: boolean
 }
 
 export function DependenciesPanel({
   document,
   onChange,
   onDirty,
-  chartActionsRef
+  chartActionsRef,
+  embedded = false
 }: DependenciesPanelProps) {
   const [predecessor, setPredecessor] = useState('')
   const [successor, setSuccessor] = useState('')
@@ -58,11 +61,11 @@ export function DependenciesPanel({
 
   const canAdd = predecessor && successor && predecessor !== successor
 
-  return (
-    <section className="panel-section">
-      <h3>Dependencies (FS)</h3>
-      <p className="panel-desc">
-        Finish-to-start links: the predecessor must finish before the successor starts.
+  const content = (
+    <>
+      {!embedded && <h3>Dependencies (FS)</h3>}
+      <p className={embedded ? 'inspector-hint' : 'panel-desc'}>
+        Finish-to-start: predecessor must finish before successor starts.
       </p>
 
       <label>
@@ -119,6 +122,10 @@ export function DependenciesPanel({
           ))}
         </ul>
       )}
-    </section>
+    </>
   )
+
+  if (embedded) return content
+
+  return <section className="panel-section">{content}</section>
 }

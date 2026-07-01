@@ -1,7 +1,8 @@
 import { differenceInCalendarDays } from 'date-fns'
-import type { GanttLink, GanttTask, ProposalDocument, TimelineMode, TimelineUnit } from '../types'
+import type { GanttLink, GanttTask, ProposalDocument, TimelineMode, TimelineUnit, TimelineZoom } from '../types'
 import { getTaskEnd, reconcileAllFsConstraints } from './dependencies'
 import { asDate, defaultProjectStartDate, normalizeTasks } from './timeline'
+import { timelineUnitToZoomPreset, zoomPresetToTimelineUnit } from './ganttZoom'
 
 export function serializeDocument(doc: ProposalDocument): string {
   return JSON.stringify(doc, null, 2)
@@ -40,11 +41,16 @@ export function reviveDocument(doc: ProposalDocument): ProposalDocument {
   })
   const tasks = normalizeTasks(reconcileAllFsConstraints(revivedTasks, links))
 
+  const timelineZoom =
+    (doc.meta.timelineZoom as TimelineZoom | undefined) ??
+    timelineUnitToZoomPreset(doc.meta.timelineUnit as TimelineUnit | undefined)
+
   return {
     ...doc,
     meta: {
       ...doc.meta,
-      timelineUnit: (doc.meta.timelineUnit ?? 'day') as TimelineUnit,
+      timelineUnit: zoomPresetToTimelineUnit(timelineZoom),
+      timelineZoom,
       timelineMode: (doc.meta.timelineMode ?? 'relative') as TimelineMode,
       projectStartDate: doc.meta.projectStartDate ?? defaultProjectStartDate()
     },
