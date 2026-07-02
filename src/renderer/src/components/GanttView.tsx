@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Gantt, Willow } from '@svar-ui/react-gantt'
 import '@svar-ui/react-gantt/all.css'
-import type { GanttLink, GanttTask, TimelineMode, TimelineZoom } from '../types'
+import type { ChartInteractionMode, GanttLink, GanttTask, TimelineMode, TimelineZoom } from '../types'
 import type { GanttChartActions } from '../lib/ganttActions'
 import { addDays } from 'date-fns'
 import { coerceTaskId } from '../lib/dependencies'
@@ -26,6 +26,12 @@ import { useDragToLink } from '../hooks/useDragToLink'
 import { LinkDragOverlay } from './LinkDragOverlay'
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
 
+const INTERACTION_MODES: { id: ChartInteractionMode; label: string; title: string }[] = [
+  { id: 'select', label: 'Select', title: 'Reorder and reparent rows in the grid' },
+  { id: 'schedule', label: 'Schedule', title: 'Move and resize task bars on the chart' },
+  { id: 'link', label: 'Link', title: 'Draw finish-to-start dependencies' }
+]
+
 interface GanttViewProps {
   tasks: GanttTask[]
   links: GanttLink[]
@@ -36,6 +42,7 @@ interface GanttViewProps {
   onTimelineModeChange: (mode: TimelineMode) => void
   onTasksChange: (tasks: GanttTask[]) => void
   onLinksChange: (links: GanttLink[]) => void
+  onSelectedTaskChange?: (taskId: number | string | null) => void
   onRegisterChartActions?: (actions: GanttChartActions) => void
   chartDocumentKey: string
 }
@@ -50,11 +57,12 @@ export function GanttView({
   onTimelineModeChange,
   onTasksChange,
   onLinksChange,
+  onSelectedTaskChange,
   onRegisterChartActions,
   chartDocumentKey
 }: GanttViewProps) {
   const chartRef = useRef<HTMLDivElement>(null)
-  const [linkMode, setLinkMode] = useState(false)
+  const [interactionMode, setInteractionMode] = useState<ChartInteractionMode>('select')
   const [linkMessage, setLinkMessage] = useState<string | null>(null)
   const [chartRange, setChartRange] = useState<{ start: Date; end: Date }>(() =>
     defaultChartRange(tasks, timelineMode, projectStartDate)
@@ -66,8 +74,10 @@ export function GanttView({
   const { handleInit, applyFsLink, setChartData } = useGanttApi({
     tasks,
     links,
+    interactionMode,
     onTasksChange,
     onLinksChange,
+    onSelectedTaskChange,
     onRegisterChartActions,
     onLinkMessage: setLinkMessage
   })
@@ -75,6 +85,11 @@ export function GanttView({
   useEffect(() => {
     setChartData({ tasks, links, timelineMode, projectStartDate })
   }, [tasks, links, timelineMode, projectStartDate, setChartData])
+
+  useEffect(() => {
+    setInteractionMode('select')
+    setLinkMessage(null)
+  }, [chartDocumentKey])
 
   const ganttTasks = useMemo(() => {
     const base =
@@ -140,16 +155,41 @@ export function GanttView({
     [onTimelineZoomChange, timelineZoom]
   )
 
+  const linkMode = interactionMode === 'link'
   const drag = useDragToLink(chartRef, linkMode, (sourceId, targetId) => {
     void applyFsLink(coerceTaskId(sourceId), coerceTaskId(targetId))
   })
 
+  const chartModeClass =
+    interactionMode === 'link'
+      ? ' interaction-link link-mode-active'
+      : ` interaction-${interactionMode}`
+
   return (
     <GanttChartContext.Provider value={chartContextValue}>
       <div
-        className={`gantt-chart proposal-gantt-theme${linkMode ? ' link-mode-active' : ''}${drag ? ' link-dragging' : ''}`}
+        className={`gantt-chart proposal-gantt-theme${chartModeClass}${drag ? ' link-dragging' : ''}`}
       >
       <div className="gantt-toolbar">
+        <div className="timeline-unit-toggle" role="group" aria-label="Interaction mode">
+          {INTERACTION_MODES.map(({ id, label, title }) => (
+            <button
+              key={id}
+              type="button"
+              className={`gantt-tool-btn${interactionMode === id ? ' is-active' : ''}`}
+              title={title}
+              onClick={() => {
+                setInteractionMode(id)
+                setLinkMessage(null)
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <span className="toolbar-divider" />
+
         <div className="timeline-unit-toggle" role="group" aria-label="Timeline mode">
           <button
             type="button"
@@ -212,18 +252,6 @@ export function GanttView({
           </button>
         </div>
 
-        <span className="toolbar-divider" />
-
-        <button
-          type="button"
-          className={`gantt-tool-btn${linkMode ? ' is-active' : ''}`}
-          onClick={() => {
-            setLinkMode((on) => !on)
-            setLinkMessage(null)
-          }}
-        >
-          {linkMode ? 'Linking' : 'Link'}
-        </button>
         {linkMessage && <span className="gantt-tool-error">{linkMessage}</span>}
       </div>
 

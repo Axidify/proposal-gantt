@@ -1,4 +1,4 @@
-import { addDays } from 'date-fns'
+import { addDays, format } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 import type { GanttTask } from '../types'
 import {
@@ -30,6 +30,10 @@ describe('asDate', () => {
   it('parses ISO strings', () => {
     expect(asDate('2025-06-01').getFullYear()).toBe(2025)
   })
+
+  it('treats small integers as day offsets, not Unix timestamps', () => {
+    expect(asDate(14).getTime()).toBe(addDays(TIMELINE_EPOCH, 14).getTime())
+  })
 })
 
 describe('relative start edit helpers', () => {
@@ -55,6 +59,19 @@ describe('calendar conversion', () => {
     const back = fromCalendarTasks(calendar, projectStart)
     expect(back[0].start.getTime()).toBe(relative[0].start.getTime())
     expect(back[1].start.getTime()).toBe(relative[1].start.getTime())
+  })
+
+  it('does not misread a numeric day index as 1972 in calendar display', () => {
+    const projectStart = '2026-07-06'
+    const goLive: GanttTask = {
+      id: 4,
+      text: 'Go-live',
+      type: 'milestone',
+      start: 14 as unknown as Date,
+      duration: 0
+    }
+    const calendar = toCalendarTasks([goLive], projectStart)
+    expect(format(calendar[0].start, 'yyyy-MM-dd')).toBe('2026-07-20')
   })
 })
 

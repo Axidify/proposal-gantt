@@ -1,31 +1,42 @@
-import { useState, type RefObject } from 'react'
-import { FileText, GitBranch, StickyNote } from 'lucide-react'
-import type { ProposalDocument } from '../types'
+import { useEffect, useState, type RefObject } from 'react'
+import { FileText, GitBranch, ListTree, StickyNote } from 'lucide-react'
+import type { GanttTask, ProposalDocument } from '../types'
 import type { GanttChartActions } from '../lib/ganttActions'
+import { zoomPresetToTimelineUnit } from '../lib/ganttZoom'
 import { DependenciesPanel } from './DependenciesPanel'
+import { TaskPanel } from './TaskPanel'
 
-type InspectorTab = 'details' | 'links' | 'notes'
+type InspectorTab = 'proposal' | 'task' | 'links' | 'notes'
 
 interface InspectorPanelProps {
   document: ProposalDocument
+  selectedTaskId: number | string | null
   onChange: (updater: (prev: ProposalDocument) => ProposalDocument) => void
   onDirty: () => void
+  onTaskChange: (taskId: number | string, patch: Partial<GanttTask>) => void
   chartActionsRef: RefObject<GanttChartActions | null>
 }
 
 const TABS: { id: InspectorTab; label: string; icon: typeof FileText }[] = [
-  { id: 'details', label: 'Details', icon: FileText },
+  { id: 'proposal', label: 'Proposal', icon: FileText },
+  { id: 'task', label: 'Task', icon: ListTree },
   { id: 'links', label: 'Links', icon: GitBranch },
   { id: 'notes', label: 'Notes', icon: StickyNote }
 ]
 
 export function InspectorPanel({
   document,
+  selectedTaskId,
   onChange,
   onDirty,
+  onTaskChange,
   chartActionsRef
 }: InspectorPanelProps) {
-  const [tab, setTab] = useState<InspectorTab>('details')
+  const [tab, setTab] = useState<InspectorTab>('proposal')
+
+  useEffect(() => {
+    if (selectedTaskId != null) setTab('task')
+  }, [selectedTaskId])
 
   const updateMeta = (field: keyof ProposalDocument['meta'], value: string) => {
     onChange((d) => ({
@@ -36,6 +47,7 @@ export function InspectorPanel({
   }
 
   const calendarMode = document.meta.timelineMode === 'calendar'
+  const timelineUnit = zoomPresetToTimelineUnit(document.meta.timelineZoom ?? 'day')
 
   return (
     <aside className="inspector">
@@ -56,7 +68,7 @@ export function InspectorPanel({
       </nav>
 
       <div className="inspector-body">
-        {tab === 'details' && (
+        {tab === 'proposal' && (
           <div className="inspector-pane" role="tabpanel">
             <label>
               Title
@@ -110,6 +122,18 @@ export function InspectorPanel({
               </p>
             )}
           </div>
+        )}
+
+        {tab === 'task' && (
+          <TaskPanel
+            tasks={document.tasks}
+            links={document.links}
+            selectedTaskId={selectedTaskId}
+            timelineMode={document.meta.timelineMode ?? 'relative'}
+            timelineUnit={document.meta.timelineUnit ?? timelineUnit}
+            projectStartDate={document.meta.projectStartDate}
+            onTaskChange={onTaskChange}
+          />
         )}
 
         {tab === 'links' && (

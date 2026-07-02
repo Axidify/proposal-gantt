@@ -2,6 +2,9 @@ export type TimelineUnit = 'day' | 'month' | 'year'
 export type TimelineMode = 'relative' | 'calendar'
 export type TimelineZoom = 'hour' | 'day' | 'week' | 'month' | 'year'
 
+/** Chart interaction mode (Phase B2). */
+export type ChartInteractionMode = 'select' | 'schedule' | 'link'
+
 export interface ProposalMeta {
   title: string
   client: string

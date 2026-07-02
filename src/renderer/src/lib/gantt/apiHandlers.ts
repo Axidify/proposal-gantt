@@ -1,5 +1,5 @@
 import type { IApi } from '@svar-ui/react-gantt'
-import type { GanttLink, GanttTask, TimelineMode } from '../../types'
+import type { GanttLink, GanttTask, TimelineMode, ChartInteractionMode } from '../../types'
 import {
   addFsDependency,
   coerceTaskId,
@@ -31,15 +31,32 @@ export interface GanttApiHandlerContext {
   getData: () => ChartData
   getDragState: () => DragEditState
   setDragState: (patch: Partial<DragEditState>) => void
+  getInteractionMode: () => ChartInteractionMode
   shouldSkipApiSync: () => boolean
   shouldSkipLinkIntercept: () => boolean
   onLinkMessage: (message: string | null) => void
   onTasksChange: (tasks: GanttTask[]) => void
   onLinksChange: (links: GanttLink[]) => void
+  onSelectedTaskChange?: (taskId: number | string | null) => void
   syncFromApi: (api: IApi) => Promise<void>
 }
 
 export function registerGanttApiHandlers(api: IApi, ctx: GanttApiHandlerContext): void {
+  api.intercept('drag-task', (ev: { inProgress?: boolean }) => {
+    if (ctx.getInteractionMode() === 'select') return false
+    return true
+  })
+
+  api.intercept('move-task', () => {
+    const mode = ctx.getInteractionMode()
+    if (mode === 'schedule' || mode === 'link') return false
+    return true
+  })
+
+  api.on('select-task', (ev: { id?: number | string }) => {
+    if (ev.id != null) ctx.onSelectedTaskChange?.(ev.id)
+  })
+
   api.intercept('add-task', (ev: AddTaskInterceptEvent) => {
     if (ctx.shouldSkipApiSync() || ctx.shouldSkipLinkIntercept()) return true
 

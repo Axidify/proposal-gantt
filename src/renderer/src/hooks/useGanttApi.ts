@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { IApi } from '@svar-ui/react-gantt'
-import type { GanttLink, GanttTask } from '../types'
+import type { GanttLink, GanttTask, ChartInteractionMode } from '../types'
 import type { GanttChartActions } from '../lib/ganttActions'
 import { addFsDependency, removeFsDependency } from '../lib/dependencies'
-import { fromCalendarTasks, toCalendarTasks, asDate } from '../lib/timeline'
+import { reviveSerializedTask, toCalendarTasks, asDate } from '../lib/timeline'
 import { tasksChanged } from '../lib/tasks'
 import { scheduleFromSerializedTasks } from '../lib/gantt/sync'
 import { scheduleChartViewportSync } from '../lib/gantt/chartViewport'
@@ -16,8 +16,10 @@ import {
 interface UseGanttApiOptions {
   tasks: GanttTask[]
   links: GanttLink[]
+  interactionMode: ChartInteractionMode
   onTasksChange: (tasks: GanttTask[]) => void
   onLinksChange: (links: GanttLink[]) => void
+  onSelectedTaskChange?: (taskId: number | string | null) => void
   onRegisterChartActions?: (actions: GanttChartActions) => void
   onLinkMessage: (message: string | null) => void
 }
@@ -25,8 +27,10 @@ interface UseGanttApiOptions {
 export function useGanttApi({
   tasks,
   links,
+  interactionMode,
   onTasksChange,
   onLinksChange,
+  onSelectedTaskChange,
   onRegisterChartActions,
   onLinkMessage
 }: UseGanttApiOptions) {
@@ -48,8 +52,12 @@ export function useGanttApi({
 
   const onTasksChangeRef = useRef(onTasksChange)
   const onLinksChangeRef = useRef(onLinksChange)
+  const onSelectedTaskChangeRef = useRef(onSelectedTaskChange)
+  const interactionModeRef = useRef(interactionMode)
   onTasksChangeRef.current = onTasksChange
   onLinksChangeRef.current = onLinksChange
+  onSelectedTaskChangeRef.current = onSelectedTaskChange
+  interactionModeRef.current = interactionMode
 
   const setChartData = useCallback((data: ChartData) => {
     dataRef.current = data
@@ -154,9 +162,7 @@ export function useGanttApi({
     let nextTasks = api.serialize({ data: 'tasks' }) as GanttTask[] | null
     if (!nextTasks) return
 
-    if (mode === 'calendar') {
-      nextTasks = fromCalendarTasks(nextTasks, start)
-    }
+    nextTasks = nextTasks.map((task) => reviveSerializedTask(task, mode, start))
 
     const barMove = !drag.dragHadResize
     const movedId = drag.movedTaskId ?? undefined
@@ -203,11 +209,13 @@ export function useGanttApi({
         setDragState: (patch) => {
           dragStateRef.current = { ...dragStateRef.current, ...patch }
         },
+        getInteractionMode: () => interactionModeRef.current,
         shouldSkipApiSync: () => skipApiSync.current,
         shouldSkipLinkIntercept: () => skipLinkIntercept.current,
         onLinkMessage,
         onTasksChange: (tasks) => onTasksChangeRef.current(tasks),
         onLinksChange: (links) => onLinksChangeRef.current(links),
+        onSelectedTaskChange: (taskId) => onSelectedTaskChangeRef.current?.(taskId),
         syncFromApi
       })
 

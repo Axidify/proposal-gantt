@@ -7,6 +7,7 @@ import { createBlankProposal, SAMPLE_PROPOSALS } from './lib/templates'
 import { documentTitle, parseDocument, reviveDocument, serializeDocument } from './lib/document'
 import { timelineModeLabel } from './lib/timeline'
 import { zoomPresetToTimelineUnit } from './lib/ganttZoom'
+import { normalizeMilestoneTaskPatch } from './lib/tasks'
 import { applyTheme, type ThemeId } from './lib/themes'
 import { Header } from './components/Header'
 import { InspectorPanel } from './components/InspectorPanel'
@@ -21,6 +22,7 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeId>('ocean')
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [documentEpoch, setDocumentEpoch] = useState(0)
+  const [selectedTaskId, setSelectedTaskId] = useState<number | string | null>(null)
   const exportRef = useRef<HTMLDivElement>(null)
   const chartActionsRef = useRef<GanttChartActions | null>(null)
 
@@ -34,6 +36,7 @@ export default function App() {
     setDocument(reviveDocument(doc))
     setFilePath(path)
     setDirty(false)
+    setSelectedTaskId(null)
     setDocumentEpoch((epoch) => epoch + 1)
   }, [])
 
@@ -89,6 +92,27 @@ export default function App() {
     (links: GanttLink[]) => updateDocument((d) => ({ ...d, links })),
     [updateDocument]
   )
+
+  const handleTaskPatch = useCallback(
+    (taskId: number | string, patch: Partial<GanttTask>) => {
+      updateDocument((d) => ({
+        ...d,
+        tasks: d.tasks.map((t) =>
+          String(t.id) === String(taskId)
+            ? { ...t, ...normalizeMilestoneTaskPatch(taskId, patch, d.tasks) }
+            : t
+        )
+      }))
+    },
+    [updateDocument]
+  )
+
+  useEffect(() => {
+    if (selectedTaskId == null || !document) return
+    if (!document.tasks.some((t) => String(t.id) === String(selectedTaskId))) {
+      setSelectedTaskId(null)
+    }
+  }, [document, selectedTaskId])
 
   const handleRegisterChartActions = useCallback((actions: GanttChartActions) => {
     chartActionsRef.current = actions
@@ -173,8 +197,10 @@ export default function App() {
         {inspectorOpen && (
           <InspectorPanel
             document={document}
+            selectedTaskId={selectedTaskId}
             onChange={updateDocument}
             onDirty={markDirty}
+            onTaskChange={handleTaskPatch}
             chartActionsRef={chartActionsRef}
           />
         )}
@@ -222,6 +248,7 @@ export default function App() {
               }
               onTasksChange={handleTasksChange}
               onLinksChange={handleLinksChange}
+              onSelectedTaskChange={setSelectedTaskId}
               onRegisterChartActions={handleRegisterChartActions}
             />
             {document.meta.notes && <footer className="export-notes">{document.meta.notes}</footer>}

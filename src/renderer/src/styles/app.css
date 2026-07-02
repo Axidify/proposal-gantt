@@ -388,6 +388,53 @@
   margin: 0.25rem 0 1rem;
 }
 
+.inspector-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 8rem;
+}
+
+.inspector-fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inspector-fieldset legend {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+.inspector-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  margin-bottom: 0.35rem;
+  cursor: pointer;
+}
+
+.inspector-field-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 0.25rem;
+}
+
+.inspector-readonly {
+  margin-top: 0.5rem;
+}
+
+.inspector-readonly p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
 /* Legacy panel classes (dependencies embed) */
 .panel-section h3 {
   margin: 0 0 0.85rem;
@@ -715,13 +762,18 @@
   transform: scale(1.06);
 }
 
-/* Grid row drag to reorder / reparent */
-.proposal-gantt-theme:not(.link-mode-active) .wx-grid .wx-content.wx-text {
+/* Grid row drag to reorder / reparent — select mode only */
+.proposal-gantt-theme.interaction-select .wx-grid .wx-content.wx-text {
   cursor: grab;
 }
 
-.proposal-gantt-theme:not(.link-mode-active) .wx-grid .wx-reorder-task .wx-content.wx-text {
+.proposal-gantt-theme.interaction-select .wx-grid .wx-reorder-task .wx-content.wx-text {
   cursor: grabbing;
+}
+
+.proposal-gantt-theme.interaction-schedule .wx-grid .wx-content.wx-text,
+.proposal-gantt-theme.interaction-link .wx-grid .wx-content.wx-text {
+  cursor: default;
 }
 
 .gantt-tool-error {

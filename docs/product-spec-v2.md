@@ -511,14 +511,14 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 
 | ID | Work item | Status | Evidence |
 |----|-----------|--------|----------|
-| B1 | **Task** inspector tab | ❌ | No `EditorSelection`; tabs are Details / Links / Notes |
-| B2 | Mode switcher (Select / Schedule / Link) | ❌ | Three parallel drag systems still active |
+| B1 | **Task** inspector tab | ✅ | `TaskPanel.tsx`; `select-task` → `selectedTaskId`; auto-opens Task tab |
+| B2 | Mode switcher (Select / Schedule / Link) | ✅ | `GanttView` toolbar; `apiHandlers` intercepts `drag-task` / `move-task` per mode |
 | B3 | Undo / redo | ❌ | — |
 | B4 | Delete task/phase UI | ❌ | SVAR may support shortcut; no in-app affordance |
 | B5 | Link lag editor | ❌ | `lag` on links + scheduling only |
 | B6 | Recent files on Welcome | ❌ | Templates + New/Open only |
 
-**Phase B overall:** ~15% — Links tab + layout only.
+**Phase B overall:** ~40% — B1/B2 shipped; undo, delete UI, lag editor, recent files remain.
 
 #### Phase C — Deliverable quality
 
@@ -559,9 +559,9 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 | Wireframe | Target | Built | Gap |
 |-----------|--------|-------|-----|
 | §6.1 Welcome | Recent files list | ❌ | Asymmetric layout ✅; no Recent section |
-| §6.2 Inspector tabs | Proposal / **Task** / Links / Notes | Details / Links / Notes | **Task tab missing**; “Proposal” renamed Details |
-| §6.2 Toolbar | `[Days\|Months\|Years]` | Zoom presets (Hour…Year) | Different control — chart zoom, not column unit only |
-| §6.2 Header | Mode switcher + inspector | Inspector toggle ✅ | No Select/Schedule/Link mode |
+| §6.2 Inspector tabs | Proposal / **Task** / Links / Notes | Proposal / Task / Links / Notes | ✅ |
+| §6.2 Toolbar zoom | `[Days\|Months\|Years]` | Zoom presets (Hour…Year) | Different control — chart zoom, not column unit only |
+| §6.2 Toolbar modes | Select / Schedule / Link | Select / Schedule / Link + inspector toggle | ✅ |
 | §6.3 Export preview | Modal with paper/margins | ❌ | Direct header PNG/PDF |
 | §6.4 Settings | Theme default, autosave, shortcuts | ❌ | — |
 

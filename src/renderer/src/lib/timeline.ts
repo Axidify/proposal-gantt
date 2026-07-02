@@ -14,10 +14,50 @@ export function defaultProjectStartDate(): string {
   return format(nextMonday, 'yyyy-MM-dd')
 }
 
-export function asDate(value: Date | string | undefined | null): Date {
+/** Magnitude below which a numeric value is a day offset, not a Unix timestamp. */
+const DAY_OFFSET_MAX = 100_000
+
+export function isDayOffsetNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= DAY_OFFSET_MAX
+}
+
+export function asDate(value: Date | string | number | undefined | null): Date {
   if (value instanceof Date) return value
   if (value == null) return new Date(NaN)
+  if (isDayOffsetNumber(value)) return offsetDay(value)
   return new Date(value)
+}
+
+/** Normalize task dates after chart serialize (handles day-index numbers and calendar dates). */
+export function reviveSerializedTask(
+  task: GanttTask,
+  mode: TimelineMode,
+  projectStart: string
+): GanttTask {
+  if (isDayOffsetNumber(task.start)) {
+    return {
+      ...task,
+      start: offsetDay(task.start),
+      end:
+        task.end != null && isDayOffsetNumber(task.end)
+          ? offsetDay(task.end)
+          : task.end != null
+            ? asDate(task.end)
+            : undefined
+    }
+  }
+
+  const revived: GanttTask = {
+    ...task,
+    start: asDate(task.start),
+    end: task.end != null ? asDate(task.end) : undefined
+  }
+
+  if (mode === 'calendar') {
+    return fromCalendarTasks([revived], projectStart)[0]
+  }
+
+  return revived
 }
 
 export function isValidDate(value: Date | string | undefined | null): boolean {

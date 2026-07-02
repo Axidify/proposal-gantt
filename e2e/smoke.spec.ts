@@ -34,8 +34,8 @@ test.describe('Proposal Gantt smoke', () => {
     await page.getByRole('button', { name: 'Start date' }).click()
     await expect(page.getByText(/Starting/i)).toBeVisible()
 
-    await page.getByRole('button', { name: 'Link' }).click()
-    await expect(page.getByRole('button', { name: 'Linking' })).toBeVisible()
+    await page.getByRole('button', { name: 'Link', exact: true }).click()
+    await expect(page.locator('.gantt-chart.interaction-link.link-mode-active')).toBeVisible()
 
     await page.getByRole('tab', { name: 'Links' }).click()
     await page.getByLabel('Predecessor').selectOption({ label: 'Kickoff' })

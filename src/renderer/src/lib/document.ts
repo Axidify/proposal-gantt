@@ -19,8 +19,8 @@ export function parseDocument(raw: string): ProposalDocument {
 function reviveTask(task: GanttTask): GanttTask {
   return {
     ...task,
-    start: typeof task.start === 'string' ? new Date(task.start) : task.start,
-    end: task.end ? (typeof task.end === 'string' ? new Date(task.end) : task.end) : undefined
+    start: asDate(task.start),
+    end: task.end != null ? asDate(task.end) : undefined
   }
 }
 
