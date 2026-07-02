@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Gantt, Willow, type IApi } from '@svar-ui/react-gantt'
+import { Gantt, Willow } from '@svar-ui/react-gantt'
 import '@svar-ui/react-gantt/all.css'
 import type { GanttLink, GanttTask, TimelineMode, TimelineZoom } from '../types'
 import type { GanttChartActions } from '../lib/ganttActions'
-import { addFsDependency, applyFsScheduling, coerceTaskId, FS_LINK_TYPE, removeFsDependency, taskDatesDiffer } from '../lib/dependencies'
-import {
-  asDate,
-  fromCalendarTasks,
-  getTimelineColumns,
-  getTimelineScales,
-  TIMELINE_EPOCH,
-  toCalendarTasks
-} from '../lib/timeline'
+import { coerceTaskId } from '../lib/dependencies'
+import { getTimelineScales, toCalendarTasks } from '../lib/timeline'
 import {
   autofitChart,
   buildZoomConfig,
@@ -23,13 +16,10 @@ import {
   zoomPresetToLevel,
   zoomPresetToTimelineUnit
 } from '../lib/ganttZoom'
-import { parseISO } from 'date-fns'
+import { buildGanttColumns } from '../lib/gantt/columns'
+import { useGanttApi } from '../hooks/useGanttApi'
 import { useDragToLink } from '../hooks/useDragToLink'
 import { LinkDragOverlay } from './LinkDragOverlay'
-import { AddRowCell } from './AddRowCell'
-import { MilestoneToggleCell } from './MilestoneToggleCell'
-import { nextTaskId } from '../lib/document'
-import { defaultNewTaskStart, normalizeMilestoneTaskPatch, tasksChanged } from '../lib/tasks'
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
 
 interface GanttViewProps {
@@ -46,16 +36,6 @@ interface GanttViewProps {
   chartDocumentKey: string
 }
 
-const SYNC_EVENTS = [
-  'update-task',
-  'add-task',
-  'delete-task',
-  'update-link',
-  'delete-link',
-  'copy-task',
-  'move-task'
-] as const
-
 export function GanttView({
   tasks,
   links,
@@ -70,14 +50,6 @@ export function GanttView({
   chartDocumentKey
 }: GanttViewProps) {
   const chartRef = useRef<HTMLDivElement>(null)
-  const apiRef = useRef<IApi | null>(null)
-  const dataRef = useRef({ tasks, links, timelineMode, projectStartDate })
-  const skipLinkIntercept = useRef(false)
-  const skipApiSync = useRef(false)
-  const tasksBeforeEditRef = useRef<GanttTask[] | null>(null)
-  const movedTaskIdRef = useRef<number | string | null>(null)
-  const dragHadResizeRef = useRef(false)
-  const dragInitialWidthRef = useRef<number | null>(null)
   const [linkMode, setLinkMode] = useState(false)
   const [linkMessage, setLinkMessage] = useState<string | null>(null)
   const [chartRange, setChartRange] = useState<{ start: Date; end: Date }>(() =>
@@ -85,15 +57,18 @@ export function GanttView({
   )
 
   const timelineUnit = zoomPresetToTimelineUnit(timelineZoom)
-
   const ganttKey = `${chartDocumentKey}-${timelineMode}-${projectStartDate}-${timelineZoom}`
 
-  const onTasksChangeRef = useRef(onTasksChange)
-  const onLinksChangeRef = useRef(onLinksChange)
-  onTasksChangeRef.current = onTasksChange
-  onLinksChangeRef.current = onLinksChange
+  const { handleInit, applyFsLink, setChartData } = useGanttApi({
+    onTasksChange,
+    onLinksChange,
+    onRegisterChartActions,
+    onLinkMessage: setLinkMessage
+  })
 
-  dataRef.current = { tasks, links, timelineMode, projectStartDate }
+  useEffect(() => {
+    setChartData({ tasks, links, timelineMode, projectStartDate })
+  }, [tasks, links, timelineMode, projectStartDate, setChartData])
 
   const ganttTasks = useMemo(
     () =>
@@ -115,29 +90,10 @@ export function GanttView({
     setChartRange(defaultChartRange(tasks, timelineMode, projectStartDate))
   }, [chartDocumentKey, timelineMode, projectStartDate])
 
-  const columns = useMemo(() => {
-    const [taskCol, ...rest] = getTimelineColumns(timelineUnit, timelineMode)
-    return [
-      taskCol,
-      {
-        id: 'milestone-toggle',
-        header: '◆',
-        width: 36,
-        align: 'center' as const,
-        resize: false,
-        cell: MilestoneToggleCell
-      },
-      ...rest,
-      {
-        id: 'add-task',
-        header: '',
-        width: 56,
-        align: 'center' as const,
-        resize: false,
-        cell: AddRowCell
-      }
-    ]
-  }, [timelineUnit, timelineMode])
+  const columns = useMemo(
+    () => buildGanttColumns(timelineUnit, timelineMode),
+    [timelineUnit, timelineMode]
+  )
 
   const handleAutofit = useCallback(() => {
     const { range, preset } = autofitChart(ganttTasks)
@@ -155,271 +111,9 @@ export function GanttView({
     [onTimelineZoomChange, timelineZoom]
   )
 
-  const pushTaskUpdatesToChart = useCallback(
-    async (
-      api: IApi,
-      prevTasks: GanttTask[],
-      nextTasks: GanttTask[]
-    ) => {
-      skipLinkIntercept.current = true
-      try {
-        for (const task of nextTasks) {
-          const prev = prevTasks.find((t) => String(t.id) === String(task.id))
-          if (!prev) continue
-          if (asDate(prev.start).getTime() === asDate(task.start).getTime()) continue
-
-          const chartTask =
-            timelineMode === 'calendar'
-              ? toCalendarTasks([task], projectStartDate)[0]
-              : task
-          await api.exec('update-task', {
-            id: task.id,
-            task: { start: chartTask.start }
-          })
-        }
-      } finally {
-        skipLinkIntercept.current = false
-      }
-    },
-    [timelineMode, projectStartDate]
-  )
-
-  const applyFsLink = useCallback(
-    async (sourceId: string | number, targetId: string | number) => {
-      const { tasks: currentTasks, links: currentLinks } = dataRef.current
-      const result = addFsDependency(currentTasks, currentLinks, sourceId, targetId)
-
-      if (result.error) {
-        if (result.error === 'This FS dependency already exists.') {
-          setLinkMessage(null)
-          return { ok: true as const }
-        }
-        setLinkMessage(result.error)
-        return { ok: false as const, error: result.error }
-      }
-
-      const api = apiRef.current
-      if (api) {
-        await pushTaskUpdatesToChart(api, currentTasks, result.tasks)
-      }
-
-      onTasksChange(result.tasks)
-      onLinksChange(result.links)
-      setLinkMessage(null)
-      return { ok: true as const }
-    },
-    [onTasksChange, onLinksChange, pushTaskUpdatesToChart]
-  )
-
-  const removeFsLinkFromChart = useCallback(
-    async (linkId: string | number) => {
-      onLinksChange(removeFsDependency(dataRef.current.links, linkId))
-      setLinkMessage(null)
-    },
-    [onLinksChange]
-  )
-
-  useEffect(() => {
-    onRegisterChartActions?.({
-      addFsLink: applyFsLink,
-      removeFsLink: removeFsLinkFromChart
-    })
-  }, [applyFsLink, removeFsLinkFromChart, onRegisterChartActions])
-
   const drag = useDragToLink(chartRef, linkMode, (sourceId, targetId) => {
     void applyFsLink(coerceTaskId(sourceId), coerceTaskId(targetId))
   })
-
-  const syncFromApi = useCallback(async (api: IApi) => {
-    const { links, timelineMode: mode, projectStartDate: start } = dataRef.current
-    const prevTasks = tasksBeforeEditRef.current ?? dataRef.current.tasks
-    tasksBeforeEditRef.current = null
-
-    let nextTasks = api.serialize({ data: 'tasks' }) as GanttTask[] | null
-    if (!nextTasks) return
-
-    if (mode === 'calendar') {
-      nextTasks = fromCalendarTasks(nextTasks, start)
-    }
-
-    const barMove = !dragHadResizeRef.current
-    dragHadResizeRef.current = false
-    dragInitialWidthRef.current = null
-
-    const movedId = movedTaskIdRef.current ?? undefined
-    movedTaskIdRef.current = null
-
-    const { tasks: scheduledTasks, links: scheduledLinks } = applyFsScheduling(
-      prevTasks,
-      nextTasks,
-      links,
-      movedId,
-      { barMove }
-    )
-
-    const tasksNeedingChartUpdate = scheduledTasks.filter((task) => {
-      const chartTask = nextTasks.find((t) => String(t.id) === String(task.id))
-      if (!chartTask) return false
-      return taskDatesDiffer(task, chartTask)
-    })
-
-    if (tasksNeedingChartUpdate.length) {
-      skipApiSync.current = true
-      try {
-        for (const task of tasksNeedingChartUpdate) {
-          const chartTask =
-            mode === 'calendar' ? toCalendarTasks([task], start)[0] : task
-          await api.exec('update-task', {
-            id: task.id,
-            task: {
-              start: chartTask.start,
-              ...(chartTask.end ? { end: chartTask.end } : {})
-            }
-          })
-        }
-      } finally {
-        skipApiSync.current = false
-      }
-    }
-
-    if (tasksChanged(dataRef.current.tasks, scheduledTasks)) {
-      onTasksChangeRef.current(scheduledTasks)
-    }
-    if (scheduledLinks !== links) onLinksChangeRef.current(scheduledLinks)
-  }, [])
-
-  const handleInit = useCallback(
-    (api: IApi) => {
-      apiRef.current = api
-
-      api.intercept('add-task', (ev: {
-        id?: number | string
-        target?: number | string
-        mode?: 'before' | 'after' | 'child'
-        task?: Partial<GanttTask>
-      }) => {
-        if (skipApiSync.current || skipLinkIntercept.current) return true
-
-        const { tasks } = dataRef.current
-        const newId = nextTaskId(tasks)
-        const isPhase = ev.task?.type === 'summary'
-        const mode =
-          ev.mode ?? (isPhase ? 'after' : tasks.find((t) => String(t.id) === String(ev.target))?.type === 'summary' ? 'child' : 'after')
-
-        ev.id = newId
-        ev.mode = mode
-        ev.task = {
-          type: isPhase ? 'summary' : 'task',
-          text: isPhase ? 'New Phase' : 'New Task',
-          duration: isPhase ? 14 : 3,
-          progress: 0,
-          open: isPhase ? true : undefined,
-          start: defaultNewTaskStart(tasks, ev.target, mode),
-          ...ev.task,
-          id: newId
-        }
-        return true
-      })
-
-      api.intercept('update-task', (ev: {
-        id?: number | string
-        inProgress?: boolean
-        task?: Partial<GanttTask>
-      }) => {
-        if (skipApiSync.current || skipLinkIntercept.current) return true
-
-        if (ev.task && ev.id != null) {
-          ev.task = normalizeMilestoneTaskPatch(ev.id, ev.task, dataRef.current.tasks)
-        }
-
-        if (ev.inProgress) {
-          if (!tasksBeforeEditRef.current) {
-            tasksBeforeEditRef.current = structuredClone(dataRef.current.tasks)
-          }
-          if (ev.id != null) movedTaskIdRef.current = ev.id
-        }
-        return true
-      })
-
-      api.on('drag-task', (ev: {
-        id?: number | string
-        inProgress?: boolean
-        width?: number
-      }) => {
-        if (skipApiSync.current) return
-        if (ev.inProgress) {
-          if (!tasksBeforeEditRef.current) {
-            tasksBeforeEditRef.current = structuredClone(dataRef.current.tasks)
-            dragHadResizeRef.current = false
-            dragInitialWidthRef.current = null
-          }
-          if (ev.id != null) movedTaskIdRef.current = ev.id
-          if (typeof ev.width !== 'undefined') {
-            if (dragInitialWidthRef.current === null) {
-              dragInitialWidthRef.current = ev.width
-            } else if (ev.width !== dragInitialWidthRef.current) {
-              dragHadResizeRef.current = true
-            }
-          }
-        }
-      })
-
-      api.on('update-task', (ev: { inProgress?: boolean }) => {
-        if (ev?.inProgress || skipApiSync.current) return
-        queueMicrotask(() => {
-          if (!skipApiSync.current) void syncFromApi(api)
-        })
-      })
-
-      for (const event of SYNC_EVENTS) {
-        if (event === 'update-task') continue
-        api.on(event, (ev: { inProgress?: boolean }) => {
-          if (ev?.inProgress || skipApiSync.current) return
-          void syncFromApi(api)
-        })
-      }
-
-      api.intercept('add-link', (ev: { link: { source: number | string; target: number | string; type?: string } }) => {
-        if (skipLinkIntercept.current) return true
-
-        const result = addFsDependency(
-          dataRef.current.tasks,
-          dataRef.current.links,
-          ev.link.source,
-          ev.link.target
-        )
-        if (result.error) {
-          if (result.error === 'This FS dependency already exists.') {
-            setLinkMessage(null)
-            return false
-          }
-          setLinkMessage(result.error)
-          return false
-        }
-
-        ev.link.type = FS_LINK_TYPE
-        ev.link.source = coerceTaskId(ev.link.source)
-        ev.link.target = coerceTaskId(ev.link.target)
-
-        queueMicrotask(() => {
-          onTasksChangeRef.current(result.tasks)
-          onLinksChangeRef.current(result.links)
-          setLinkMessage(null)
-        })
-        return true
-      })
-
-      api.intercept('delete-link', () => {
-        if (skipLinkIntercept.current) return true
-        queueMicrotask(() => {
-          const serialized = api.serialize({ data: 'links' }) as GanttLink[] | null
-          if (serialized) onLinksChangeRef.current(serialized)
-        })
-        return true
-      })
-    },
-    [syncFromApi]
-  )
 
   return (
     <div

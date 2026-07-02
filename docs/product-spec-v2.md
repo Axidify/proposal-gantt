@@ -499,13 +499,13 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 
 | ID | Work item | Status | Evidence |
 |----|-----------|--------|----------|
-| A1 | Split `GanttView` | ❌ | ~473 lines; no `lib/gantt/sync.ts`, `intercepts.ts`, `useGanttApi.ts` |
-| A2 | Vitest + `npm test` | ❌ | No vitest in `package.json` |
-| A3 | Reparent/add integration tests | ❌ | Manual `tasksChanged` only |
+| A1 | Split `GanttView` | ⚠️ | `GanttView` ~220 lines; extracted `lib/gantt/sync.ts`, `lib/gantt/columns.ts`, `hooks/useGanttApi.ts` |
+| A2 | Vitest + `npm test` | ✅ | Vitest 4; 25 tests; `npm run verify-scheduling` aliases scheduling suite; `.github/workflows/ci.yml` |
+| A3 | Reparent/add integration tests | ⚠️ | `tasks.test.ts` covers `tasksChanged`, milestones, `defaultNewTaskStart`; no chart-level reparent test yet |
 | A4 | Pin + document SVAR extensions | ⚠️ | `@svar-ui/react-gantt@^2.7.1`; heavy `.wx-*` CSS undocumented |
 | A5 | `sandbox: true`, preload audit | ❌ | `sandbox: false` in `src/main/index.ts` |
 
-**Phase A overall:** ~5% — not safe to iterate at scale yet.
+**Phase A overall:** ~45% — test gate in place; chart layer partially split; security (A5) still open.
 
 #### Phase B — Editor UX
 
@@ -623,6 +623,7 @@ Copy for sprint planning — check off as shipped:
 | 2026-07-01 | `c31248b` | Layout revamp, inspector tabs, inline edit, milestones, add/reparent, scheduling fixes, zoom/autofit, visual polish, product spec |
 | 2026-07-01 | — | §9 decisions: auto summary roll-up; 0-day default lag on new links |
 | 2026-07-01 | — | §9 closed: desktop-only; user-data template folder; free internal use (no licensing) |
+| 2026-07-01 | — | Phase A start: Vitest + CI, scheduling/tasks/timeline tests, `GanttView` split into sync/columns/hook |
 
 *Add a row here when merging significant work.*
 

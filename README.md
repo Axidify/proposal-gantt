@@ -22,6 +22,7 @@ A desktop app for pre-sales teams to create beautiful Gantt charts for client pr
 ```bash
 npm install
 npm run dev
+npm test
 ```
 
 ## Build installers
