@@ -499,13 +499,13 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 
 | ID | Work item | Status | Evidence |
 |----|-----------|--------|----------|
-| A1 | Split `GanttView` | ⚠️ | `GanttView` ~220 lines; extracted `lib/gantt/sync.ts`, `lib/gantt/columns.ts`, `hooks/useGanttApi.ts` |
-| A2 | Vitest + `npm test` | ✅ | Vitest 4; 25 tests; `npm run verify-scheduling` aliases scheduling suite; `.github/workflows/ci.yml` |
-| A3 | Reparent/add integration tests | ⚠️ | `tasks.test.ts` covers `tasksChanged`, milestones, `defaultNewTaskStart`; no chart-level reparent test yet |
-| A4 | Pin + document SVAR extensions | ⚠️ | `@svar-ui/react-gantt@^2.7.1`; heavy `.wx-*` CSS undocumented |
-| A5 | `sandbox: true`, preload audit | ❌ | `sandbox: false` in `src/main/index.ts` |
+| A1 | Split `GanttView` | ✅ | `GanttView` ~220 lines; `lib/gantt/sync.ts`, `columns.ts`, `intercepts.ts`, `apiHandlers.ts`, `hooks/useGanttApi.ts` |
+| A2 | Vitest + `npm test` | ✅ | Vitest 4; 34 tests; `npm run verify-scheduling`; `.github/workflows/ci.yml` |
+| A3 | Reparent/add integration tests | ✅ | `taskOps.test.ts` — add-task intercept, reparent + FS scheduling |
+| A4 | Pin + document SVAR extensions | ✅ | Pinned `2.7.1`; `docs/svar-extensions.md` |
+| A5 | `sandbox: true`, preload audit | ✅ | Hardened `webPreferences`; `docs/electron-security.md`; preload exposes only `api` + toolkit |
 
-**Phase A overall:** ~45% — test gate in place; chart layer partially split; security (A5) still open.
+**Phase A overall:** ✅ **Complete** — safe to iterate; proceed to Phase B.
 
 #### Phase B — Editor UX
 
@@ -607,11 +607,12 @@ Copy for sprint planning — check off as shipped:
 
 **Product decisions (§9):** Desktop only; auto summary roll-up; 0-day lag on new links; templates in local user-data folder; free internal use (no licensing).
 
-1. **Phase A** — `GanttView` split + Vitest + wire `verify-scheduling.ts` → `npm test` + GitHub Actions  
-2. **Phase B1 + B2** — Task inspector + toolbar mode switcher (closes biggest wireframe gap)  
-3. **Phase C3** — Autosave (success metric §4.3)  
-4. **Phase C1** — Export preview  
-5. **Then** — Custom colors / `brandColor` (§Future v1.1+, user request queued)
+1. **Phase B1 + B2** — Task inspector + toolbar mode switcher (closes biggest wireframe gap)  
+2. **Phase C3** — Autosave (success metric §4.3)  
+3. **Phase C1** — Export preview  
+4. **Then** — Custom colors / `brandColor` (§Future v1.1+, user request queued)
+
+*Phase A (foundation) is complete as of 2026-07-01.*
 
 ---
 
@@ -624,6 +625,7 @@ Copy for sprint planning — check off as shipped:
 | 2026-07-01 | — | §9 decisions: auto summary roll-up; 0-day default lag on new links |
 | 2026-07-01 | — | §9 closed: desktop-only; user-data template folder; free internal use (no licensing) |
 | 2026-07-01 | — | Phase A start: Vitest + CI, scheduling/tasks/timeline tests, `GanttView` split into sync/columns/hook |
+| 2026-07-01 | — | Phase A complete: intercepts split, task ops tests, SVAR docs, sandbox + preload audit |
 
 *Add a row here when merging significant work.*
 

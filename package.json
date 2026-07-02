@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
-    "@svar-ui/react-gantt": "^2.7.1",
+    "@svar-ui/react-gantt": "2.7.1",
     "date-fns": "^4.1.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",

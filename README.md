@@ -15,7 +15,7 @@ A desktop app for pre-sales teams to create beautiful Gantt charts for client pr
 
 - **Electron** — cross-platform desktop (macOS & Windows)
 - **React + TypeScript + Vite**
-- **SVAR React Gantt** — MIT-licensed Gantt component
+- **SVAR React Gantt** — MIT-licensed Gantt component ([extension points](docs/svar-extensions.md))
 
 ## Getting started
 
