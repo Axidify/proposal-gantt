@@ -432,4 +432,193 @@ interface ProposalMeta {
 
 ---
 
-*Next step: review this spec, answer open questions in §9, then start **Phase A** (foundation) before adding new user-facing features.*
+## 11. Implementation delta (living record)
+
+**Last updated:** 2026-07-01  
+**Baseline:** This spec was written at **v0.1 / post-MVP** (see §1).  
+**Current shipped commit:** `c31248b` — *Revamp proposal editor with scheduling fixes, zoom, and visual polish.*
+
+Use this section as the **source of truth for progress**. Update it when a roadmap item ships or when scope intentionally changes.
+
+### 11.1 How to read this
+
+| Symbol | Meaning |
+|--------|---------|
+| ✅ Done | Shipped and usable |
+| ⚠️ Partial | Started or subset only |
+| ❌ Not started | In spec, not built |
+| ➕ Beyond spec | Built but not in original v1.0 plan |
+
+---
+
+### 11.2 Completed from spec (§2 “keep and build on”)
+
+| Item | Ref | Status | Notes |
+|------|-----|--------|-------|
+| Proposal card + export model | §2.1 | ✅ | White `export-frame` inside dark chrome |
+| Relative vs calendar timeline | §2.1 | ✅ | Toolbar + inspector project start |
+| FS dependencies + lag (backend) | §2.2 | ✅ | `dependencies.ts`; lag preserved on drag after bugfixes |
+| `verify-scheduling.ts` (8 cases) | §2.2 | ✅ | Script only — **not** in `npm test` |
+| Inline task name / start / duration | §2.3 | ✅ | Grid column editors |
+| Add task / add phase | §2.3 | ✅ | `AddRowCell` + `add-task` intercept |
+| Milestone toggle | §2.3 | ✅ | `MilestoneToggleCell` |
+| Drag rows between phases | §2.3 | ✅ | `move-task` + `tasksChanged` sync |
+| Drag bars + FS reschedule | §2.3 | ✅ | Drop-only sync; predecessor-earlier bug fixed |
+| Visual link mode | §2.3 | ✅ | `useDragToLink`; handle positioning fixed |
+| Dependencies list | §2.3 | ✅ | Inspector → **Links** tab |
+| Chart-first layout | §2.4 | ✅ | Collapsible inspector, grouped header |
+| Theme swatches | §2.4 | ✅ | Header — **session only** (not in `.pgantt`) |
+| `.pgantt` v1 JSON | §2.5 | ✅ | `version: 1` unchanged |
+
+---
+
+### 11.3 Improved beyond spec (not in §7 roadmap)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Full visual design pass | ➕ ✅ | Plus Jakarta / Instrument Serif, asymmetric welcome, refined export card |
+| Timeline zoom + autofit | ➕ ✅ | Hours · Days · Weeks · Months · Years; `ganttZoom.ts`; Fit button |
+| `timelineZoom` in document meta | ➕ ✅ | Persisted in `.pgantt`; not in §8.3 |
+| Scheduling bugfixes | ➕ ✅ | `movedTaskIdRef` on drop; no live sync during `drag-task` |
+| Duplicate timeline headers fix | ➕ ✅ | Epoch-aligned relative scales; `autoScale={false}` |
+| `tasks.ts` module | ➕ ⚠️ | `tasksChanged`, milestone helpers — partial Phase A1 |
+| `docs/product-spec-v2.md` | ➕ ✅ | This document |
+| Custom colors / `brandColor` | ➕ ❌ | Discussed; not implemented |
+
+**Spec conflict:** §4 non-goals include *hour-level scheduling*. We added **hour zoom view** only (not hour-based task duration).
+
+---
+
+### 11.4 Roadmap progress (§7)
+
+#### Phase A — Foundation
+
+| ID | Work item | Status | Evidence |
+|----|-----------|--------|----------|
+| A1 | Split `GanttView` | ❌ | ~473 lines; no `lib/gantt/sync.ts`, `intercepts.ts`, `useGanttApi.ts` |
+| A2 | Vitest + `npm test` | ❌ | No vitest in `package.json` |
+| A3 | Reparent/add integration tests | ❌ | Manual `tasksChanged` only |
+| A4 | Pin + document SVAR extensions | ⚠️ | `@svar-ui/react-gantt@^2.7.1`; heavy `.wx-*` CSS undocumented |
+| A5 | `sandbox: true`, preload audit | ❌ | `sandbox: false` in `src/main/index.ts` |
+
+**Phase A overall:** ~5% — not safe to iterate at scale yet.
+
+#### Phase B — Editor UX
+
+| ID | Work item | Status | Evidence |
+|----|-----------|--------|----------|
+| B1 | **Task** inspector tab | ❌ | No `EditorSelection`; tabs are Details / Links / Notes |
+| B2 | Mode switcher (Select / Schedule / Link) | ❌ | Three parallel drag systems still active |
+| B3 | Undo / redo | ❌ | — |
+| B4 | Delete task/phase UI | ❌ | SVAR may support shortcut; no in-app affordance |
+| B5 | Link lag editor | ❌ | `lag` on links + scheduling only |
+| B6 | Recent files on Welcome | ❌ | Templates + New/Open only |
+
+**Phase B overall:** ~15% — Links tab + layout only.
+
+#### Phase C — Deliverable quality
+
+| ID | Work item | Status |
+|----|-----------|--------|
+| C1 | Export preview modal + page size | ❌ |
+| C2 | Summary phase date roll-up | ❌ |
+| C3 | Autosave + recovery | ❌ |
+| C4 | In-app shortcut help | ❌ |
+
+**Phase C overall:** 0%.
+
+#### Phase D — Ship
+
+| ID | Work item | Status |
+|----|-----------|--------|
+| D1 | Signed installers | ⚠️ | `electron-builder` scripts exist; not validated in CI |
+| D2 | Playwright smoke E2E | ❌ |
+| D3 | README + changelog v1.0 | ❌ | README still describes v0.1 |
+| D4 | Sample `.pgantt` gallery | ⚠️ | Two bundled templates only |
+
+**Phase D overall:** ~10%.
+
+---
+
+### 11.5 Wireframe vs built (§6)
+
+| Wireframe | Target | Built | Gap |
+|-----------|--------|-------|-----|
+| §6.1 Welcome | Recent files list | ❌ | Asymmetric layout ✅; no Recent section |
+| §6.2 Inspector tabs | Proposal / **Task** / Links / Notes | Details / Links / Notes | **Task tab missing**; “Proposal” renamed Details |
+| §6.2 Toolbar | `[Days\|Months\|Years]` | Zoom presets (Hour…Year) | Different control — chart zoom, not column unit only |
+| §6.2 Header | Mode switcher + inspector | Inspector toggle ✅ | No Select/Schedule/Link mode |
+| §6.3 Export preview | Modal with paper/margins | ❌ | Direct header PNG/PDF |
+| §6.4 Settings | Theme default, autosave, shortcuts | ❌ | — |
+
+---
+
+### 11.6 Table-stakes checklist (§3.6)
+
+Copy for sprint planning — check off as shipped:
+
+- [ ] Undo / redo
+- [ ] Delete task (visible UI + keyboard)
+- [ ] Edit link lag in UI
+- [ ] Progress % UI
+- [ ] Summary roll-up dates from children
+- [ ] Recent files on Welcome
+- [ ] Autosave / crash recovery
+- [ ] Export preview / margins
+- [ ] Persist theme / brand color in `.pgantt`
+- [ ] Task inspector (selection-driven)
+
+---
+
+### 11.7 Known issues / tech debt (carry forward)
+
+| Issue | Severity | Notes |
+|-------|----------|-------|
+| `GanttView` god component | High | Grows with every chart feature |
+| SVAR `.wx-*` coupling | High | Upgrade risk; link layer + zoom fragile |
+| Dependency arrows rendering | Medium | Observed empty `.wx-links` in some zoom/config states — verify |
+| Interaction mode overlap | Medium | Link vs row drag vs bar drag |
+| No CI / automated tests | High | Scheduling regressions possible |
+| Theme not in file format | Low | Reopen resets accent |
+| README drift | Low | Update when calling v1.0 |
+
+---
+
+### 11.8 Updated scorecard (2026-07-01)
+
+| Area | Spec (§10) | Now | Delta |
+|------|------------|-----|-------|
+| Core scheduling | ★★★★☆ | ★★★★☆ | Bugfixes; still no CI |
+| Editing UX | ★★★☆☆ | ★★★☆☆ | Richer; still mode-heavy |
+| Visual design | ★★★★☆ | ★★★★★ | Design pass exceeded spec |
+| Architecture | ★★☆☆☆ | ★★☆☆☆ | Unchanged |
+| Reliability | ★★☆☆☆ | ★★☆☆☆ | Unchanged |
+| Ship readiness | ★★☆☆☆ | ★★☆☆☆ | Unchanged |
+
+**Verdict (Jul 2026):** Stronger **demo/prototype** than when §10 was written. **Not** v1.0-ready per this spec. Intentional tradeoff: UX/chart polish over Phase A–D.
+
+---
+
+### 11.9 Recommended next steps (ordered)
+
+1. **Phase A** — `GanttView` split + Vitest + wire `verify-scheduling.ts` → `npm test` + GitHub Actions  
+2. **Phase B1 + B2** — Task inspector + toolbar mode switcher (closes biggest wireframe gap)  
+3. **Phase C3** — Autosave (success metric §4.3)  
+4. **Phase C1** — Export preview  
+5. **Then** — Custom colors / `brandColor` (§Future v1.1+, user request queued)
+
+---
+
+### 11.10 Changelog (high level)
+
+| Date | Commit / milestone | Summary |
+|------|-------------------|---------|
+| — | `bc7b633` | Initial MVP: Electron, Gantt, FS deps, templates, export |
+| 2026-07-01 | `c31248b` | Layout revamp, inspector tabs, inline edit, milestones, add/reparent, scheduling fixes, zoom/autofit, visual polish, product spec |
+
+*Add a row here when merging significant work.*
+
+---
+
+*Next step: Keep §11 updated each sprint. Before new user-facing features, prefer unchecked items in §11.6 and Phase A unless explicitly reprioritized.*
+
