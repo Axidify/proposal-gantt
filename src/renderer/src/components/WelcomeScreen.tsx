@@ -1,4 +1,7 @@
-import { ArrowRight, FilePlus2, FolderOpen } from 'lucide-react'
+import { ArrowRight, Clock3, FilePlus2, FolderOpen } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
+import type { RecentFileEntry } from '../lib/recentFiles'
+import { recentFileLabel } from '../lib/recentFiles'
 
 interface Template {
   id: string
@@ -9,11 +12,20 @@ interface Template {
 interface WelcomeScreenProps {
   onNew: () => void
   onOpen: () => void
+  onOpenRecent: (path: string) => void
   onTemplate: (id: string) => void
   templates: Template[]
+  recentFiles: RecentFileEntry[]
 }
 
-export function WelcomeScreen({ onNew, onOpen, onTemplate, templates }: WelcomeScreenProps) {
+export function WelcomeScreen({
+  onNew,
+  onOpen,
+  onOpenRecent,
+  onTemplate,
+  templates,
+  recentFiles
+}: WelcomeScreenProps) {
   return (
     <div className="welcome">
       <div className="welcome-bg" aria-hidden="true" />
@@ -47,6 +59,34 @@ export function WelcomeScreen({ onNew, onOpen, onTemplate, templates }: WelcomeS
               <kbd className="welcome-kbd">⌘O</kbd>
             </button>
           </div>
+
+          {recentFiles.length > 0 && (
+            <div className="welcome-recent">
+              <div className="welcome-recent-header">
+                <p className="welcome-section-label">Recent</p>
+              </div>
+              <div className="recent-list">
+                {recentFiles.map((entry) => (
+                  <button
+                    key={entry.path}
+                    type="button"
+                    className="recent-row"
+                    onClick={() => onOpenRecent(entry.path)}
+                  >
+                    <span className="recent-row-copy">
+                      <span className="recent-title">{entry.title}</span>
+                      <span className="recent-meta">
+                        <Clock3 size={13} strokeWidth={2} aria-hidden="true" />
+                        {formatDistanceToNow(new Date(entry.updatedAt), { addSuffix: true })}
+                        <span className="recent-path">{recentFileLabel(entry.path)}</span>
+                      </span>
+                    </span>
+                    <ArrowRight size={16} className="recent-row-arrow" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="welcome-templates">
             <p className="welcome-section-label">Templates</p>

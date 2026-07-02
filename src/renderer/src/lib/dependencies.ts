@@ -380,6 +380,25 @@ export function addFsDependency(
   }
 }
 
+export function setFsLinkLag(
+  tasks: GanttTask[],
+  links: GanttLink[],
+  linkId: number | string,
+  lagDays: number
+): { tasks: GanttTask[]; links: GanttLink[] } {
+  const lag = Math.max(0, Math.round(lagDays))
+  const link = links.find((l) => String(l.id) === String(linkId))
+  if (!link || link.type !== FS_LINK_TYPE) return { tasks, links }
+
+  const updatedLinks = links.map((item) =>
+    String(item.id) === String(linkId) ? { ...item, lag } : item
+  )
+  let updatedTasks = shiftSuccessorAfterPredecessor(tasks, link.source, link.target, lag)
+  updatedTasks = reconcileAllFsConstraints(updatedTasks, updatedLinks)
+
+  return { tasks: updatedTasks, links: updatedLinks }
+}
+
 export function removeFsDependency(links: GanttLink[], linkId: number | string): GanttLink[] {
   return links.filter((l) => String(l.id) !== String(linkId))
 }

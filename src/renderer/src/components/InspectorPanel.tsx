@@ -14,6 +14,8 @@ interface InspectorPanelProps {
   onChange: (updater: (prev: ProposalDocument) => ProposalDocument) => void
   onDirty: () => void
   onTaskChange: (taskId: number | string, patch: Partial<GanttTask>) => void
+  onInboundLagChange: (taskId: number | string, lagDays: number) => void
+  onDeleteTask: () => void
   chartActionsRef: RefObject<GanttChartActions | null>
 }
 
@@ -30,6 +32,8 @@ export function InspectorPanel({
   onChange,
   onDirty,
   onTaskChange,
+  onInboundLagChange,
+  onDeleteTask,
   chartActionsRef
 }: InspectorPanelProps) {
   const [tab, setTab] = useState<InspectorTab>('proposal')
@@ -133,6 +137,8 @@ export function InspectorPanel({
             timelineUnit={document.meta.timelineUnit ?? timelineUnit}
             projectStartDate={document.meta.projectStartDate}
             onTaskChange={onTaskChange}
+            onInboundLagChange={onInboundLagChange}
+            onDeleteTask={onDeleteTask}
           />
         )}
 

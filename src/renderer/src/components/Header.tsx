@@ -6,7 +6,9 @@ import {
   ImageDown,
   FileText,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Undo2,
+  Redo2
 } from 'lucide-react'
 import type { ThemeId } from '../lib/themes'
 import { THEMES } from '../lib/themes'
@@ -17,11 +19,15 @@ interface HeaderProps {
   filePath?: string
   theme: ThemeId
   inspectorOpen: boolean
+  canUndo: boolean
+  canRedo: boolean
   onInspectorToggle: () => void
   onThemeChange: (theme: ThemeId) => void
   onNew: () => void
   onOpen: () => void
   onSave: () => void
+  onUndo: () => void
+  onRedo: () => void
   onExportPng: () => void
   onExportPdf: () => void
 }
@@ -32,11 +38,15 @@ export function Header({
   filePath,
   theme,
   inspectorOpen,
+  canUndo,
+  canRedo,
   onInspectorToggle,
   onThemeChange,
   onNew,
   onOpen,
   onSave,
+  onUndo,
+  onRedo,
   onExportPng,
   onExportPdf
 }: HeaderProps) {
@@ -79,6 +89,31 @@ export function Header({
           <button type="button" className="btn btn-ghost btn-sm" onClick={onSave} title="Save (⌘S)">
             <Save size={15} />
             <span className="btn-label">Save</span>
+          </button>
+        </div>
+
+        <div className="header-divider" aria-hidden="true" />
+
+        <div className="action-group" role="group" aria-label="Edit">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="Undo (⌘Z)"
+          >
+            <Undo2 size={15} />
+            <span className="btn-label">Undo</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onRedo}
+            disabled={!canRedo}
+            title="Redo (⌘⇧Z)"
+          >
+            <Redo2 size={15} />
+            <span className="btn-label">Redo</span>
           </button>
         </div>
 

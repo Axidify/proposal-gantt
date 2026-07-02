@@ -1,15 +1,14 @@
+import { Trash2 } from 'lucide-react'
 import type { GanttLink, GanttTask, TimelineMode, TimelineUnit } from '../types'
 import { fsLinks, getFsLag, taskLabel } from '../lib/dependencies'
 import {
-  asDate,
   formatRelativeDuration,
   formatRelativeStart,
-  fromCalendarTasks,
   relativeStartEditValue,
-  relativeStartFromEditValue,
-  toCalendarTasks
+  relativeStartFromEditValue
 } from '../lib/timeline'
 import { format } from 'date-fns'
+import { asDate } from '../lib/timeline'
 import { milestoneTogglePatch } from '../lib/tasks'
 
 interface TaskPanelProps {
@@ -18,8 +17,9 @@ interface TaskPanelProps {
   selectedTaskId: number | string | null
   timelineMode: TimelineMode
   timelineUnit: TimelineUnit
-  projectStartDate?: string
   onTaskChange: (taskId: number | string, patch: Partial<GanttTask>) => void
+  onInboundLagChange: (taskId: number | string, lagDays: number) => void
+  onDeleteTask: () => void
 }
 
 function inboundLag(
@@ -41,8 +41,9 @@ export function TaskPanel({
   selectedTaskId,
   timelineMode,
   timelineUnit,
-  projectStartDate,
-  onTaskChange
+  onTaskChange,
+  onInboundLagChange,
+  onDeleteTask
 }: TaskPanelProps) {
   if (selectedTaskId == null) {
     return (
@@ -64,10 +65,7 @@ export function TaskPanel({
   const isSummary = task.type === 'summary'
   const isMilestone = task.type === 'milestone'
   const lag = inboundLag(tasks, links, task.id)
-  const calendarStart =
-    timelineMode === 'calendar' && projectStartDate
-      ? toCalendarTasks([task], projectStartDate)[0].start
-      : task.start
+  const childCount = tasks.filter((t) => String(t.parent) === String(task.id)).length
 
   return (
     <div className="inspector-pane" role="tabpanel">
@@ -104,23 +102,20 @@ export function TaskPanel({
         </fieldset>
       )}
 
-      {isSummary && <p className="inspector-hint">Summary phases roll up child dates (auto roll-up in a later release).</p>}
+      {isSummary && (
+        <p className="inspector-hint">
+          Summary phases roll up child dates (auto roll-up in a later release).
+          {childCount > 0 ? ` ${childCount} child task${childCount === 1 ? '' : 's'} will also be removed.` : ''}
+        </p>
+      )}
 
       {timelineMode === 'calendar' ? (
         <label>
           Start date
           <input
             type="date"
-            value={format(asDate(calendarStart), 'yyyy-MM-dd')}
-            onChange={(e) => {
-              const picked = new Date(e.target.value)
-              if (projectStartDate) {
-                const relative = fromCalendarTasks([{ ...task, start: picked }], projectStartDate)[0]
-                onTaskChange(task.id, { start: relative.start })
-              } else {
-                onTaskChange(task.id, { start: picked })
-              }
-            }}
+            value={format(asDate(task.start), 'yyyy-MM-dd')}
+            onChange={(e) => onTaskChange(task.id, { start: new Date(e.target.value) })}
           />
         </label>
       ) : (
@@ -159,12 +154,19 @@ export function TaskPanel({
       )}
 
       {lag ? (
-        <div className="inspector-readonly">
-          <span className="inspector-label">Lag from predecessor</span>
-          <p>
-            {lag.predecessor} → {lag.lagDays} day{lag.lagDays === 1 ? '' : 's'}
-          </p>
-        </div>
+        <label>
+          Lag from predecessor ({lag.predecessor})
+          <input
+            type="number"
+            min={0}
+            value={lag.lagDays}
+            onChange={(e) => {
+              const nextLag = Math.max(0, Number.parseInt(e.target.value, 10) || 0)
+              onInboundLagChange(task.id, nextLag)
+            }}
+          />
+          <span className="inspector-field-hint">Days between predecessor end and this task start</span>
+        </label>
       ) : (
         <div className="inspector-readonly">
           <span className="inspector-label">Lag from predecessor</span>
@@ -178,6 +180,14 @@ export function TaskPanel({
           <textarea value={task.details} rows={4} readOnly />
         </label>
       )}
+
+      <div className="inspector-actions">
+        <button type="button" className="btn btn-danger btn-block" onClick={onDeleteTask}>
+          <Trash2 size={15} />
+          {isSummary ? 'Delete phase' : 'Delete task'}
+        </button>
+        <p className="inspector-hint">Delete or Backspace when a row is selected</p>
+      </div>
     </div>
   )
 }

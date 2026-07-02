@@ -2,7 +2,7 @@ import { addDays } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 import type { GanttTask } from '../types'
 import { TIMELINE_EPOCH } from '../timeline'
-import { applyAddTaskRequest, applyMilestoneToggle, insertTaskIntoTree } from './taskMutations'
+import { applyAddTaskRequest, applyMilestoneToggle, deleteTaskSubtree, insertTaskIntoTree } from './taskMutations'
 
 function task(id: number, overrides: Partial<GanttTask> = {}): GanttTask {
   return {
@@ -55,5 +55,20 @@ describe('applyAddTaskRequest', () => {
     expect(next).toHaveLength(2)
     expect(next[1].text).toBe('New Task')
     expect(next[1].parent).toBe(1)
+  })
+})
+
+describe('deleteTaskSubtree', () => {
+  it('removes a task and its descendants plus related links', () => {
+    const phase = task(1, { type: 'summary', duration: 14, open: true })
+    const child = task(2, { parent: 1 })
+    const other = task(3)
+    const links = [
+      { id: 1, source: 2, target: 3, type: 'e2s' as const, lag: 0 },
+      { id: 2, source: 3, target: 2, type: 'e2s' as const, lag: 0 }
+    ]
+    const result = deleteTaskSubtree([phase, child, other], links, 1)
+    expect(result.tasks.map((t) => t.id)).toEqual([3])
+    expect(result.links).toHaveLength(0)
   })
 })

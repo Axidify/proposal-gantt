@@ -1,6 +1,6 @@
 import { addDays, differenceInCalendarDays } from 'date-fns'
 import { describe, expect, it } from 'vitest'
-import { applyFsScheduling, getFsLag, getTaskEnd } from './dependencies'
+import { applyFsScheduling, getFsLag, getTaskEnd, setFsLinkLag } from './dependencies'
 import type { GanttLink, GanttTask } from '../types'
 import { asDate, TIMELINE_EPOCH } from './timeline'
 
@@ -118,5 +118,16 @@ describe('getTaskEnd', () => {
       duration: 4
     }
     expect(differenceInCalendarDays(getTaskEnd(t), TIMELINE_EPOCH)).toBe(4)
+  })
+})
+
+describe('setFsLinkLag', () => {
+  it('updates lag and shifts successor when needed', () => {
+    const tasks = [task(1, 0, 5), task(2, 7, 3)]
+    const links: GanttLink[] = [{ id: 9, source: 1, target: 2, type: 'e2s', lag: 2 }]
+    const { tasks: nextTasks, links: nextLinks } = setFsLinkLag(tasks, links, 9, 4)
+    expect(nextLinks[0].lag).toBe(4)
+    expect(startDay(nextTasks[1])).toBe(9)
+    expect(getFsLag(nextLinks[0], nextTasks)).toBe(4)
   })
 })

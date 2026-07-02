@@ -11,7 +11,7 @@ import {
   GANTT_SYNC_EVENTS,
   type AddTaskInterceptEvent
 } from './intercepts'
-import { applyAddTaskRequest } from './taskMutations'
+import { applyAddTaskRequest, deleteTaskSubtree } from './taskMutations'
 
 export interface ChartData {
   tasks: GanttTask[]
@@ -55,6 +55,17 @@ export function registerGanttApiHandlers(api: IApi, ctx: GanttApiHandlerContext)
 
   api.on('select-task', (ev: { id?: number | string }) => {
     if (ev.id != null) ctx.onSelectedTaskChange?.(ev.id)
+  })
+
+  api.intercept('delete-task', (ev: { id?: number | string }) => {
+    if (ctx.shouldSkipApiSync() || ctx.shouldSkipLinkIntercept()) return true
+    if (ev.id == null) return false
+
+    const { tasks, links } = ctx.getData()
+    const result = deleteTaskSubtree(tasks, links, ev.id)
+    ctx.onTasksChange(result.tasks)
+    ctx.onLinksChange(result.links)
+    return false
   })
 
   api.intercept('add-task', (ev: AddTaskInterceptEvent) => {

@@ -4,6 +4,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 const api = {
   openFile: (): Promise<{ path: string; content: string } | null> =>
     ipcRenderer.invoke('dialog:open'),
+  openFilePath: (filePath: string): Promise<{ path: string; content: string } | null> =>
+    ipcRenderer.invoke('file:read', filePath),
   saveFile: (content: string, currentPath?: string): Promise<string | null> =>
     ipcRenderer.invoke('dialog:save', content, currentPath),
   exportFile: (dataUrl: string, format: 'png' | 'pdf'): Promise<string | null> =>

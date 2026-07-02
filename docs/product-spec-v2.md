@@ -438,9 +438,10 @@ All items below were open before Phase B; **all decided 2026-07-01.**
 
 ## 11. Implementation delta (living record)
 
-**Last updated:** 2026-07-01  
+**Last updated:** 2026-07-02  
 **Baseline:** This spec was written at **v0.1 / post-MVP** (see §1).  
-**Current shipped commit:** `c31248b` — *Revamp proposal editor with scheduling fixes, zoom, and visual polish.*
+**Latest push:** `d5a4ebe` — Phase B1–B2 (task inspector + mode switcher).  
+**Working tree (uncommitted):** Phase B3–B6 (undo/redo, delete, lag editor, recent files).
 
 Use this section as the **source of truth for progress**. Update it when a roadmap item ships or when scope intentionally changes.
 
@@ -500,7 +501,7 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 | ID | Work item | Status | Evidence |
 |----|-----------|--------|----------|
 | A1 | Split `GanttView` | ✅ | `GanttView` ~220 lines; `lib/gantt/sync.ts`, `columns.ts`, `intercepts.ts`, `apiHandlers.ts`, `hooks/useGanttApi.ts` |
-| A2 | Vitest + `npm test` | ✅ | Vitest 4; 38 unit tests; `.github/workflows/ci.yml` (test + e2e jobs) |
+| A2 | Vitest + `npm test` | ✅ | Vitest 4; 45 unit tests; `.github/workflows/ci.yml` (test + e2e jobs) |
 | A3 | Reparent/add integration tests | ✅ | `taskOps.test.ts` — add-task intercept, reparent + FS scheduling |
 | A4 | Pin + document SVAR extensions | ✅ | Pinned `2.7.1`; `docs/svar-extensions.md` |
 | A5 | `sandbox: true`, preload audit | ✅ | Hardened `webPreferences`; `docs/electron-security.md`; preload exposes only `api` + toolkit |
@@ -513,12 +514,12 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 |----|-----------|--------|----------|
 | B1 | **Task** inspector tab | ✅ | `TaskPanel.tsx`; `select-task` → `selectedTaskId`; auto-opens Task tab |
 | B2 | Mode switcher (Select / Schedule / Link) | ✅ | `GanttView` toolbar; `apiHandlers` intercepts `drag-task` / `move-task` per mode |
-| B3 | Undo / redo | ❌ | — |
-| B4 | Delete task/phase UI | ❌ | SVAR may support shortcut; no in-app affordance |
-| B5 | Link lag editor | ❌ | `lag` on links + scheduling only |
-| B6 | Recent files on Welcome | ❌ | Templates + New/Open only |
+| B3 | Undo / redo | ✅ | `documentHistory.ts`; header + ⌘Z / ⌘⇧Z — ⚠️ per-keystroke history on text fields (see §11.11) |
+| B4 | Delete task/phase UI | ✅ | `TaskPanel` + Delete/Backspace; `delete-task` intercept |
+| B5 | Link lag editor | ✅ | Editable lag in Task tab; `setFsLinkLag` |
+| B6 | Recent files on Welcome | ✅ | `recentFiles.ts` + `openFilePath` IPC |
 
-**Phase B overall:** ~40% — B1/B2 shipped; undo, delete UI, lag editor, recent files remain.
+**Phase B overall:** ✅ **Complete** — editor UX items B1–B6 shipped.
 
 #### Phase C — Deliverable quality
 
@@ -558,11 +559,11 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 
 | Wireframe | Target | Built | Gap |
 |-----------|--------|-------|-----|
-| §6.1 Welcome | Recent files list | ❌ | Asymmetric layout ✅; no Recent section |
+| §6.1 Welcome | Recent files list | Recent section (localStorage + open by path) | ✅ |
 | §6.2 Inspector tabs | Proposal / **Task** / Links / Notes | Proposal / Task / Links / Notes | ✅ |
 | §6.2 Toolbar zoom | `[Days\|Months\|Years]` | Zoom presets (Hour…Year) | Different control — chart zoom, not column unit only |
 | §6.2 Toolbar modes | Select / Schedule / Link | Select / Schedule / Link + inspector toggle | ✅ |
-| §6.3 Export preview | Modal with paper/margins | ❌ | Direct header PNG/PDF |
+| §6.3 Export preview | Modal with paper/margins | Direct header PNG/PDF | **PNG/PDF broken** — `html2canvas` + `color-mix()` CSS (§11.11); no preview modal |
 | §6.4 Settings | Theme default, autosave, shortcuts | ❌ | — |
 
 ---
@@ -571,16 +572,16 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 
 Copy for sprint planning — check off as shipped:
 
-- [ ] Undo / redo
-- [ ] Delete task (visible UI + keyboard)
-- [ ] Edit link lag in UI
+- [x] Undo / redo
+- [x] Delete task (visible UI + keyboard)
+- [x] Edit link lag in UI
 - [ ] Progress % UI
 - [ ] Summary roll-up dates from children
-- [ ] Recent files on Welcome
+- [x] Recent files on Welcome
 - [ ] Autosave / crash recovery
 - [ ] Export preview / margins
 - [ ] Persist theme / brand color in `.pgantt`
-- [ ] Task inspector (selection-driven)
+- [x] Task inspector (selection-driven)
 
 ---
 
@@ -588,11 +589,14 @@ Copy for sprint planning — check off as shipped:
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
+| **PNG/PDF export broken** | **High** | `html2canvas` throws on `color-mix()` in `app.css`; no download in browser or Electron until export subtree uses parseable colors |
+| Undo per-keystroke | Medium | `documentHistory` records each `onChange`; single ⌘Z reverts one character in text fields — debounce or commit-on-blur recommended |
 | `GanttView` complexity | Medium | Split into sync/columns/hook; further splits as features land |
 | SVAR `.wx-*` coupling | High | Upgrade risk; link layer + zoom fragile |
-| Interaction mode overlap | Medium | Link vs row drag vs bar drag |
+| Interaction mode overlap | ✅ Resolved | B2 mode switcher + intercepts; verified in browser audit §11.11 |
 | Theme not in file format | Low | Reopen resets accent |
 | README drift | Low | Update when calling v1.0 |
+| Browser dev: Open / Recent open | Low | `window.api.openFile` / `openFilePath` need Electron; Save shim works |
 
 ---
 
@@ -601,13 +605,13 @@ Copy for sprint planning — check off as shipped:
 | Area | Spec (§10) | Now | Delta |
 |------|------------|-----|-------|
 | Core scheduling | ★★★★☆ | ★★★★☆ | Bugfixes; Vitest + CI |
-| Editing UX | ★★★☆☆ | ★★★★☆ | Add-row/milestone sync fixed |
+| Editing UX | ★★★☆☆ | ★★★★★ | Phase B complete: task inspector, modes, undo, delete, lag, recent |
 | Visual design | ★★★★☆ | ★★★★★ | Design pass exceeded spec |
-| Architecture | ★★☆☆☆ | ★★★☆☆ | Chart layer split; still SVAR-coupled |
-| Reliability | ★★☆☆☆ | ★★★☆☆ | Unit + smoke E2E; no autosave |
-| Ship readiness | ★★☆☆☆ | ★★★☆☆ | Phase A + audit; Phase B still open |
+| Architecture | ★★☆☆☆ | ★★★☆☆ | Chart layer split; `documentHistory`; still SVAR-coupled |
+| Reliability | ★★☆☆☆ | ★★★☆☆ | 45 unit + smoke E2E; undo; no autosave |
+| Ship readiness | ★★☆☆☆ | ★★★☆☆ | Phase B done; **export broken** blocks deliverable path |
 
-**Verdict (Jul 2026):** Stronger **demo/prototype** than when §10 was written. **Not** v1.0-ready per this spec. Foundation and audit fixes done; Phase B–D remain.
+**Verdict (Jul 2026):** Credible **internal demo** with full editor UX. **Not** v1.0-ready: fix export, then Phase C (autosave, export preview, roll-up).
 
 ---
 
@@ -615,12 +619,14 @@ Copy for sprint planning — check off as shipped:
 
 **Product decisions (§9):** Desktop only; auto summary roll-up; 0-day lag on new links; templates in local user-data folder; free internal use (no licensing).
 
-1. **Phase B1 + B2** — Task inspector + toolbar mode switcher (closes biggest wireframe gap)  
-2. **Phase C3** — Autosave (success metric §4.3)  
-3. **Phase C1** — Export preview  
-4. **Then** — Custom colors / `brandColor` (§Future v1.1+, user request queued)
+1. **Fix PNG/PDF export** — remove or scope `color-mix()` from export capture subtree (`html2canvas` blocker; §11.11)  
+2. **Commit Phase B3–B6** — undo/redo, delete, lag editor, recent files (in working tree)  
+3. **Undo debounce** — batch text-field edits before pushing history  
+4. **Phase C3** — Autosave (success metric §4.3)  
+5. **Phase C1** — Export preview modal + page size  
+6. **Then** — Custom colors / `brandColor` (§Future v1.1+, user request queued)
 
-*Phase A (foundation) is complete as of 2026-07-01. Post–Phase A audit fixes landed 2026-07-02.*
+*Phase A complete 2026-07-01. Post–Phase A audit + Phase B1–B2 pushed `d5a4ebe`. Full browser UI audit 2026-07-02.*
 
 ---
 
@@ -635,10 +641,96 @@ Copy for sprint planning — check off as shipped:
 | 2026-07-01 | — | Phase A start: Vitest + CI, scheduling/tasks/timeline tests, `GanttView` split into sync/columns/hook |
 | 2026-07-01 | — | Phase A complete: intercepts split, task ops tests, SVAR docs, sandbox + preload audit |
 | 2026-07-02 | — | Audit fixes: controlled add/milestone, chart viewport sync for dependency arrows, dev API shim, Playwright smoke + CI e2e job |
+| 2026-07-02 | `d5a4ebe` | Phase B1–B2: Task inspector tab, Select/Schedule/Link mode switcher |
+| 2026-07-02 | — | Phase B3–B6 (local): undo/redo, delete UI, lag editor, recent files |
+| 2026-07-02 | — | Full browser UI audit (§11.11): 48/51 controls pass; PNG/PDF export broken |
 
 *Add a row here when merging significant work.*
 
 ---
 
-*Next step: Keep §11 updated each sprint. Before new user-facing features, prefer unchecked items in §11.6 and Phase A unless explicitly reprioritized.*
+### 11.11 Full browser UI audit (2026-07-02)
+
+**Environment:** `npm run dev` at `http://localhost:5173` (Vite + `devApi` shim). Playwright MCP, all buttons/fields/controls exercised.
+
+#### Summary
+
+| Result | Count |
+|--------|-------|
+| Pass | 48 |
+| Broken | 2 (PNG, Export PDF) |
+| Skipped (native dialog / Electron only) | 3 (Open, Welcome Open, Recent open) |
+
+#### Welcome screen
+
+| Control | Result |
+|---------|--------|
+| New proposal | ✅ Opens editor |
+| Open existing | ⏭ Native dialog — Electron only |
+| Software Implementation template | ✅ |
+| Consulting Engagement template | ✅ |
+| Recent files (after Save) | ✅ Section appears |
+| Recent file click | ⏭ `openFilePath` — Electron only |
+
+#### Header
+
+| Control | Result |
+|---------|--------|
+| Hide / Show inspector | ✅ |
+| New | ✅ |
+| Open | ⏭ Native dialog |
+| Save | ✅ Downloads `.pgantt` |
+| Undo / Redo | ✅ (disabled until edit; see per-keystroke note) |
+| PNG | ❌ `html2canvas`: unsupported `color-mix()` |
+| Export PDF | ❌ Same root cause |
+| Theme swatches (all 5) | ✅ |
+
+#### Inspector
+
+| Tab / control | Result |
+|---------------|--------|
+| Proposal — Title, Client, Prepared by, Date | ✅ Title syncs export card |
+| Proposal — Project start (calendar mode) | ✅ |
+| Task — empty state, selection, Name, Type, Duration | ✅ |
+| Task — Start (relative + calendar) | ✅ |
+| Task — Lag editor | ✅ When inbound FS link exists |
+| Task — Delete task / phase | ✅ |
+| Links — add/remove FS dependency | ✅ |
+| Notes — Footnotes | ✅ Syncs export footer |
+
+#### Gantt toolbar
+
+| Control | Result |
+|---------|--------|
+| Select / Schedule / Link | ✅ Correct `interaction-*` classes |
+| Relative / Start date | ✅ |
+| Zoom presets (Hours–Years), in/out, Fit | ✅ |
+
+#### Grid row actions
+
+| Control | Result |
+|---------|--------|
+| Add task to phase | ✅ |
+| Mark as milestone / Convert to task | ✅ |
+
+#### Keyboard
+
+| Shortcut | Result |
+|----------|--------|
+| Delete (task selected) | ✅ |
+| ⌘Z / ⌘⇧Z | ✅ Per edit event (text = per keystroke) |
+
+#### Root cause: export failure
+
+`App.tsx` uses `html2canvas` on `.export-frame`. Modern CSS `color-mix(in srgb, …)` in `app.css` (themes, buttons, gantt accents) is not parsed by html2canvas → uncaught error, no file download.
+
+**Fix direction:** Export-only CSS without `color-mix`, or pre-resolve computed styles before capture.
+
+#### UX note: undo granularity
+
+Typing a task name pushes one history entry per `onChange`. One ⌘Z after typing `XYZ` yields `XY`, not the prior name. Recommend debounce (~300ms) or commit on blur for text fields.
+
+---
+
+*Next step: Keep §11 updated each sprint. Before new user-facing features, prefer unchecked items in §11.6 and open issues in §11.7 unless explicitly reprioritized.*
 

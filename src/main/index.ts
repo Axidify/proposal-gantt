@@ -45,6 +45,15 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  ipcMain.handle('file:read', async (_, filePath: string) => {
+    try {
+      const content = await readFile(filePath, 'utf-8')
+      return { path: filePath, content }
+    } catch {
+      return null
+    }
+  })
+
   ipcMain.handle('dialog:open', async () => {
     const result = await dialog.showOpenDialog({
       title: 'Open Proposal',

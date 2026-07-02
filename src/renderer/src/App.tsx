@@ -5,6 +5,19 @@ import type { GanttLink, GanttTask, ProposalDocument } from './types'
 import type { GanttChartActions } from './lib/ganttActions'
 import { createBlankProposal, SAMPLE_PROPOSALS } from './lib/templates'
 import { documentTitle, parseDocument, reviveDocument, serializeDocument } from './lib/document'
+import { fsLinks, setFsLinkLag } from './lib/dependencies'
+import { deleteTaskSubtree } from './lib/gantt/taskMutations'
+import {
+  applyDocumentUpdate,
+  canRedoHistory,
+  canUndoHistory,
+  createInitialHistoryState,
+  loadHistoryDocument,
+  redoDocument,
+  undoDocument,
+  type DocumentHistoryState
+} from './lib/documentHistory'
+import { addRecentFile, listRecentFiles, removeRecentFile, type RecentFileEntry } from './lib/recentFiles'
 import { timelineModeLabel } from './lib/timeline'
 import { zoomPresetToTimelineUnit } from './lib/ganttZoom'
 import { normalizeMilestoneTaskPatch } from './lib/tasks'
@@ -15,16 +28,25 @@ import { GanttView } from './components/GanttView'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import './styles/app.css'
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
+}
+
 export default function App() {
-  const [document, setDocument] = useState<ProposalDocument | null>(null)
+  const [history, setHistory] = useState<DocumentHistoryState>(createInitialHistoryState)
   const [filePath, setFilePath] = useState<string | undefined>()
   const [dirty, setDirty] = useState(false)
   const [theme, setTheme] = useState<ThemeId>('ocean')
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [documentEpoch, setDocumentEpoch] = useState(0)
   const [selectedTaskId, setSelectedTaskId] = useState<number | string | null>(null)
+  const [recentFiles, setRecentFiles] = useState<RecentFileEntry[]>(() => listRecentFiles())
   const exportRef = useRef<HTMLDivElement>(null)
   const chartActionsRef = useRef<GanttChartActions | null>(null)
+
+  const document = history.document
 
   useEffect(() => {
     applyTheme(theme)
@@ -33,26 +55,65 @@ export default function App() {
   const markDirty = useCallback(() => setDirty(true), [])
 
   const loadDocument = useCallback((doc: ProposalDocument, path?: string) => {
-    setDocument(reviveDocument(doc))
+    setHistory(loadHistoryDocument(createInitialHistoryState(), doc))
     setFilePath(path)
     setDirty(false)
     setSelectedTaskId(null)
     setDocumentEpoch((epoch) => epoch + 1)
+    if (path) setRecentFiles(addRecentFile(path, documentTitle(doc)))
+  }, [])
+
+  const updateDocument = useCallback(
+    (updater: (prev: ProposalDocument) => ProposalDocument, options?: { skipHistory?: boolean }) => {
+      setHistory((prev) => applyDocumentUpdate(prev, updater, options))
+      setDirty(true)
+    },
+    []
+  )
+
+  const handleUndo = useCallback(() => {
+    setHistory((prev) => undoDocument(prev))
+    setDirty(true)
+  }, [])
+
+  const handleRedo = useCallback(() => {
+    setHistory((prev) => redoDocument(prev))
+    setDirty(true)
   }, [])
 
   const handleNew = useCallback(() => {
     loadDocument(createBlankProposal())
   }, [loadDocument])
 
+  const openParsedDocument = useCallback(
+    (content: string, path: string) => {
+      try {
+        loadDocument(parseDocument(content), path)
+      } catch {
+        alert('Could not open this file. Please choose a valid .pgantt proposal.')
+      }
+    },
+    [loadDocument]
+  )
+
   const handleOpen = useCallback(async () => {
     const result = await window.api.openFile()
     if (!result) return
-    try {
-      loadDocument(parseDocument(result.content), result.path)
-    } catch {
-      alert('Could not open this file. Please choose a valid .pgantt proposal.')
-    }
-  }, [loadDocument])
+    openParsedDocument(result.content, result.path)
+  }, [openParsedDocument])
+
+  const handleOpenRecent = useCallback(
+    async (path: string) => {
+      const result = await window.api.openFilePath(path)
+      if (!result) {
+        setRecentFiles(removeRecentFile(path))
+        alert('Could not open this file. It may have been moved or deleted.')
+        return
+      }
+      openParsedDocument(result.content, result.path)
+    },
+    [openParsedDocument]
+  )
 
   const handleSave = useCallback(async () => {
     if (!document) return
@@ -60,6 +121,7 @@ export default function App() {
     if (path) {
       setFilePath(path)
       setDirty(false)
+      setRecentFiles(addRecentFile(path, documentTitle(document)))
     }
   }, [document, filePath])
 
@@ -69,18 +131,6 @@ export default function App() {
       if (template) loadDocument(structuredClone(template.doc))
     },
     [loadDocument]
-  )
-
-  const updateDocument = useCallback(
-    (updater: (prev: ProposalDocument) => ProposalDocument) => {
-      setDocument((prev) => {
-        if (!prev) return prev
-        const next = updater(prev)
-        setDirty(true)
-        return next
-      })
-    },
-    []
   )
 
   const handleTasksChange = useCallback(
@@ -106,6 +156,28 @@ export default function App() {
     },
     [updateDocument]
   )
+
+  const handleInboundLagChange = useCallback(
+    (taskId: number | string, lagDays: number) => {
+      updateDocument((d) => {
+        const inbound = fsLinks(d.links).find((link) => String(link.target) === String(taskId))
+        if (!inbound) return d
+        const result = setFsLinkLag(d.tasks, d.links, inbound.id, lagDays)
+        return { ...d, tasks: result.tasks, links: result.links }
+      })
+    },
+    [updateDocument]
+  )
+
+  const handleDeleteSelectedTask = useCallback(() => {
+    if (selectedTaskId == null) return
+    const taskId = selectedTaskId
+    updateDocument((d) => {
+      const result = deleteTaskSubtree(d.tasks, d.links, taskId)
+      return { ...d, tasks: result.tasks, links: result.links }
+    })
+    setSelectedTaskId(null)
+  }, [selectedTaskId, updateDocument])
 
   useEffect(() => {
     if (selectedTaskId == null || !document) return
@@ -158,18 +230,45 @@ export default function App() {
         e.preventDefault()
         handleNew()
       }
+      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (!document || !canUndoHistory(history)) return
+        e.preventDefault()
+        handleUndo()
+      }
+      if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        if (!document || !canRedoHistory(history)) return
+        e.preventDefault()
+        handleRedo()
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && document && selectedTaskId != null) {
+        if (isEditableTarget(e.target)) return
+        e.preventDefault()
+        handleDeleteSelectedTask()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleSave, handleOpen, handleNew])
+  }, [
+    handleSave,
+    handleOpen,
+    handleNew,
+    handleUndo,
+    handleRedo,
+    handleDeleteSelectedTask,
+    document,
+    history,
+    selectedTaskId
+  ])
 
   if (!document) {
     return (
       <WelcomeScreen
         onNew={handleNew}
         onOpen={() => void handleOpen()}
+        onOpenRecent={(path) => void handleOpenRecent(path)}
         onTemplate={handleTemplate}
         templates={SAMPLE_PROPOSALS}
+        recentFiles={recentFiles}
       />
     )
   }
@@ -185,11 +284,15 @@ export default function App() {
         filePath={filePath}
         theme={theme}
         inspectorOpen={inspectorOpen}
+        canUndo={canUndoHistory(history)}
+        canRedo={canRedoHistory(history)}
         onInspectorToggle={() => setInspectorOpen((open) => !open)}
         onThemeChange={setTheme}
         onNew={handleNew}
         onOpen={() => void handleOpen()}
         onSave={() => void handleSave()}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
         onExportPng={() => void captureExport('png')}
         onExportPdf={() => void captureExport('pdf')}
       />
@@ -201,6 +304,8 @@ export default function App() {
             onChange={updateDocument}
             onDirty={markDirty}
             onTaskChange={handleTaskPatch}
+            onInboundLagChange={handleInboundLagChange}
+            onDeleteTask={handleDeleteSelectedTask}
             chartActionsRef={chartActionsRef}
           />
         )}

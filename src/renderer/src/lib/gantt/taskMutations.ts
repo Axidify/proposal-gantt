@@ -1,4 +1,4 @@
-import type { GanttTask } from '../../types'
+import type { GanttLink, GanttTask } from '../../types'
 import { buildAddTaskInterceptPatch, type AddTaskInterceptEvent, type AddTaskMode } from './intercepts'
 import { milestoneTogglePatch, normalizeMilestoneTaskPatch } from '../tasks'
 
@@ -60,4 +60,37 @@ export function applyMilestoneToggle(
   return tasks.map((task) =>
     String(task.id) === String(taskId) ? { ...task, ...patch } : task
   )
+}
+
+export function collectDescendantIds(
+  tasks: GanttTask[],
+  rootId: number | string
+): Set<string> {
+  const ids = new Set<string>([String(rootId)])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const task of tasks) {
+      if (task.parent == null) continue
+      if (ids.has(String(task.parent)) && !ids.has(String(task.id))) {
+        ids.add(String(task.id))
+        changed = true
+      }
+    }
+  }
+  return ids
+}
+
+export function deleteTaskSubtree(
+  tasks: GanttTask[],
+  links: GanttLink[],
+  taskId: number | string
+): { tasks: GanttTask[]; links: GanttLink[] } {
+  const removeIds = collectDescendantIds(tasks, taskId)
+  return {
+    tasks: tasks.filter((task) => !removeIds.has(String(task.id))),
+    links: links.filter(
+      (link) => !removeIds.has(String(link.source)) && !removeIds.has(String(link.target))
+    )
+  }
 }

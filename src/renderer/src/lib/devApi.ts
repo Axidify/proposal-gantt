@@ -17,6 +17,10 @@ export function installDevApiShim(): void {
       console.warn('[Proposal Gantt] Open is unavailable in browser-only dev mode.')
       return null
     },
+    openFilePath: async () => {
+      console.warn('[Proposal Gantt] Open by path is unavailable in browser-only dev mode.')
+      return null
+    },
     saveFile: async (content: string) => {
       const blob = new Blob([content], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
