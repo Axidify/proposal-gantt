@@ -462,7 +462,7 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 | Proposal card + export model | §2.1 | ✅ | White `export-frame` inside dark chrome |
 | Relative vs calendar timeline | §2.1 | ✅ | Toolbar + inspector project start |
 | FS dependencies + lag (backend) | §2.2 | ✅ | `dependencies.ts`; lag preserved on drag after bugfixes |
-| `verify-scheduling.ts` (8 cases) | §2.2 | ✅ | Script only — **not** in `npm test` |
+| `verify-scheduling.ts` (8 cases) | §2.2 | ✅ | Migrated to Vitest (`dependencies.scheduling.test.ts`) |
 | Inline task name / start / duration | §2.3 | ✅ | Grid column editors |
 | Add task / add phase | §2.3 | ✅ | `AddRowCell` + `add-task` intercept |
 | Milestone toggle | §2.3 | ✅ | `MilestoneToggleCell` |
@@ -500,7 +500,7 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 | ID | Work item | Status | Evidence |
 |----|-----------|--------|----------|
 | A1 | Split `GanttView` | ✅ | `GanttView` ~220 lines; `lib/gantt/sync.ts`, `columns.ts`, `intercepts.ts`, `apiHandlers.ts`, `hooks/useGanttApi.ts` |
-| A2 | Vitest + `npm test` | ✅ | Vitest 4; 34 tests; `npm run verify-scheduling`; `.github/workflows/ci.yml` |
+| A2 | Vitest + `npm test` | ✅ | Vitest 4; 38 unit tests; `.github/workflows/ci.yml` (test + e2e jobs) |
 | A3 | Reparent/add integration tests | ✅ | `taskOps.test.ts` — add-task intercept, reparent + FS scheduling |
 | A4 | Pin + document SVAR extensions | ✅ | Pinned `2.7.1`; `docs/svar-extensions.md` |
 | A5 | `sandbox: true`, preload audit | ✅ | Hardened `webPreferences`; `docs/electron-security.md`; preload exposes only `api` + toolkit |
@@ -536,11 +536,21 @@ Use this section as the **source of truth for progress**. Update it when a roadm
 | ID | Work item | Status |
 |----|-----------|--------|
 | D1 | Signed installers | ⚠️ | `electron-builder` scripts exist; not validated in CI |
-| D2 | Playwright smoke E2E | ❌ |
+| D2 | Playwright smoke E2E | ✅ | `e2e/smoke.spec.ts`; CI `e2e` job; browser `window.api` shim in `lib/devApi.ts` |
 | D3 | README + changelog v1.0 | ❌ | README still describes v0.1 |
 | D4 | Sample `.pgantt` gallery | ⚠️ | Two bundled templates only |
 
-**Phase D overall:** ~10%.
+**Phase D overall:** ~25%.
+
+#### Post–Phase A audit fixes (2026-07-02)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Add-row / milestone controlled sync | ✅ | `taskMutations.ts`, `GanttChartContext`; no `api.exec('add-task')` from cells |
+| Dependency arrow viewport | ✅ | SVAR `_visibleLinks` empty until chart scroll; `lib/gantt/chartViewport.ts` auto-scrolls to linked tasks |
+| Browser dev `window.api` shim | ✅ | Save downloads `.pgantt`; Open warns in Vite-only dev |
+| Playwright smoke + CI | ✅ | Add row, link mode, template links, save shim |
+| Calendar zoom format strings | ✅ | `ganttZoom.ts` uses `date-fns` formatters (not `%b` literals) |
 
 ---
 
@@ -578,28 +588,26 @@ Copy for sprint planning — check off as shipped:
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| `GanttView` god component | High | Grows with every chart feature |
+| `GanttView` complexity | Medium | Split into sync/columns/hook; further splits as features land |
 | SVAR `.wx-*` coupling | High | Upgrade risk; link layer + zoom fragile |
-| Dependency arrows rendering | Medium | Observed empty `.wx-links` in some zoom/config states — verify |
 | Interaction mode overlap | Medium | Link vs row drag vs bar drag |
-| No CI / automated tests | High | Scheduling regressions possible |
 | Theme not in file format | Low | Reopen resets accent |
 | README drift | Low | Update when calling v1.0 |
 
 ---
 
-### 11.8 Updated scorecard (2026-07-01)
+### 11.8 Updated scorecard (2026-07-02)
 
 | Area | Spec (§10) | Now | Delta |
 |------|------------|-----|-------|
-| Core scheduling | ★★★★☆ | ★★★★☆ | Bugfixes; still no CI |
-| Editing UX | ★★★☆☆ | ★★★☆☆ | Richer; still mode-heavy |
+| Core scheduling | ★★★★☆ | ★★★★☆ | Bugfixes; Vitest + CI |
+| Editing UX | ★★★☆☆ | ★★★★☆ | Add-row/milestone sync fixed |
 | Visual design | ★★★★☆ | ★★★★★ | Design pass exceeded spec |
-| Architecture | ★★☆☆☆ | ★★☆☆☆ | Unchanged |
-| Reliability | ★★☆☆☆ | ★★☆☆☆ | Unchanged |
-| Ship readiness | ★★☆☆☆ | ★★☆☆☆ | Unchanged |
+| Architecture | ★★☆☆☆ | ★★★☆☆ | Chart layer split; still SVAR-coupled |
+| Reliability | ★★☆☆☆ | ★★★☆☆ | Unit + smoke E2E; no autosave |
+| Ship readiness | ★★☆☆☆ | ★★★☆☆ | Phase A + audit; Phase B still open |
 
-**Verdict (Jul 2026):** Stronger **demo/prototype** than when §10 was written. **Not** v1.0-ready per this spec. Intentional tradeoff: UX/chart polish over Phase A–D.
+**Verdict (Jul 2026):** Stronger **demo/prototype** than when §10 was written. **Not** v1.0-ready per this spec. Foundation and audit fixes done; Phase B–D remain.
 
 ---
 
@@ -612,7 +620,7 @@ Copy for sprint planning — check off as shipped:
 3. **Phase C1** — Export preview  
 4. **Then** — Custom colors / `brandColor` (§Future v1.1+, user request queued)
 
-*Phase A (foundation) is complete as of 2026-07-01.*
+*Phase A (foundation) is complete as of 2026-07-01. Post–Phase A audit fixes landed 2026-07-02.*
 
 ---
 
@@ -626,6 +634,7 @@ Copy for sprint planning — check off as shipped:
 | 2026-07-01 | — | §9 closed: desktop-only; user-data template folder; free internal use (no licensing) |
 | 2026-07-01 | — | Phase A start: Vitest + CI, scheduling/tasks/timeline tests, `GanttView` split into sync/columns/hook |
 | 2026-07-01 | — | Phase A complete: intercepts split, task ops tests, SVAR docs, sandbox + preload audit |
+| 2026-07-02 | — | Audit fixes: controlled add/milestone, chart viewport sync for dependency arrows, dev API shim, Playwright smoke + CI e2e job |
 
 *Add a row here when merging significant work.*
 

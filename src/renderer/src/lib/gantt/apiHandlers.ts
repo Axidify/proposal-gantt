@@ -11,6 +11,7 @@ import {
   GANTT_SYNC_EVENTS,
   type AddTaskInterceptEvent
 } from './intercepts'
+import { applyAddTaskRequest } from './taskMutations'
 
 export interface ChartData {
   tasks: GanttTask[]
@@ -46,7 +47,9 @@ export function registerGanttApiHandlers(api: IApi, ctx: GanttApiHandlerContext)
     ev.id = patch.id
     ev.mode = patch.mode
     ev.task = patch.task
-    return true
+
+    ctx.onTasksChange(applyAddTaskRequest(ctx.getData().tasks, ev))
+    return false
   })
 
   api.intercept('update-task', (ev: {
@@ -109,7 +112,9 @@ export function registerGanttApiHandlers(api: IApi, ctx: GanttApiHandlerContext)
     if (event === 'update-task') continue
     api.on(event, (ev: { inProgress?: boolean }) => {
       if (ev?.inProgress || ctx.shouldSkipApiSync()) return
-      void ctx.syncFromApi(api)
+      queueMicrotask(() => {
+        if (!ctx.shouldSkipApiSync()) void ctx.syncFromApi(api)
+      })
     })
   }
 

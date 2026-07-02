@@ -3,8 +3,9 @@ import { Gantt, Willow } from '@svar-ui/react-gantt'
 import '@svar-ui/react-gantt/all.css'
 import type { GanttLink, GanttTask, TimelineMode, TimelineZoom } from '../types'
 import type { GanttChartActions } from '../lib/ganttActions'
+import { addDays } from 'date-fns'
 import { coerceTaskId } from '../lib/dependencies'
-import { getTimelineScales, toCalendarTasks } from '../lib/timeline'
+import { asDate, toCalendarTasks } from '../lib/timeline'
 import {
   autofitChart,
   buildZoomConfig,
@@ -17,6 +18,9 @@ import {
   zoomPresetToTimelineUnit
 } from '../lib/ganttZoom'
 import { buildGanttColumns } from '../lib/gantt/columns'
+import type { AddTaskInterceptEvent } from '../lib/gantt/intercepts'
+import { applyAddTaskRequest, applyMilestoneToggle } from '../lib/gantt/taskMutations'
+import { GanttChartContext } from '../context/GanttChartContext'
 import { useGanttApi } from '../hooks/useGanttApi'
 import { useDragToLink } from '../hooks/useDragToLink'
 import { LinkDragOverlay } from './LinkDragOverlay'
@@ -60,6 +64,8 @@ export function GanttView({
   const ganttKey = `${chartDocumentKey}-${timelineMode}-${projectStartDate}-${timelineZoom}`
 
   const { handleInit, applyFsLink, setChartData } = useGanttApi({
+    tasks,
+    links,
     onTasksChange,
     onLinksChange,
     onRegisterChartActions,
@@ -70,20 +76,21 @@ export function GanttView({
     setChartData({ tasks, links, timelineMode, projectStartDate })
   }, [tasks, links, timelineMode, projectStartDate, setChartData])
 
-  const ganttTasks = useMemo(
-    () =>
-      timelineMode === 'calendar' ? toCalendarTasks(tasks, projectStartDate) : tasks,
-    [tasks, timelineMode, projectStartDate]
-  )
+  const ganttTasks = useMemo(() => {
+    const base =
+      timelineMode === 'calendar' ? toCalendarTasks(tasks, projectStartDate) : tasks
+    return base.map((task) => {
+      const start = asDate(task.start)
+      if (task.end) return task
+      if (task.type === 'milestone') return { ...task, end: start }
+      if (task.duration != null) return { ...task, end: addDays(start, task.duration) }
+      return task
+    })
+  }, [tasks, timelineMode, projectStartDate])
 
   const zoomConfig = useMemo(
     () => buildZoomConfig(timelineMode, timelineZoom),
     [timelineMode, timelineZoom]
-  )
-
-  const scales = useMemo(
-    () => getTimelineScales(timelineUnit, timelineMode),
-    [timelineUnit, timelineMode]
   )
 
   useEffect(() => {
@@ -93,6 +100,28 @@ export function GanttView({
   const columns = useMemo(
     () => buildGanttColumns(timelineUnit, timelineMode),
     [timelineUnit, timelineMode]
+  )
+
+  const handleAddTask = useCallback(
+    (request: AddTaskInterceptEvent) => {
+      onTasksChange(applyAddTaskRequest(tasks, request))
+    },
+    [onTasksChange, tasks]
+  )
+
+  const handleToggleMilestone = useCallback(
+    (taskId: number | string, asMilestone: boolean) => {
+      onTasksChange(applyMilestoneToggle(tasks, taskId, asMilestone))
+    },
+    [onTasksChange, tasks]
+  )
+
+  const chartContextValue = useMemo(
+    () => ({
+      onAddTask: handleAddTask,
+      onToggleMilestone: handleToggleMilestone
+    }),
+    [handleAddTask, handleToggleMilestone]
   )
 
   const handleAutofit = useCallback(() => {
@@ -116,9 +145,10 @@ export function GanttView({
   })
 
   return (
-    <div
-      className={`gantt-chart proposal-gantt-theme${linkMode ? ' link-mode-active' : ''}${drag ? ' link-dragging' : ''}`}
-    >
+    <GanttChartContext.Provider value={chartContextValue}>
+      <div
+        className={`gantt-chart proposal-gantt-theme${linkMode ? ' link-mode-active' : ''}${drag ? ' link-dragging' : ''}`}
+      >
       <div className="gantt-toolbar">
         <div className="timeline-unit-toggle" role="group" aria-label="Timeline mode">
           <button
@@ -204,7 +234,6 @@ export function GanttView({
             key={ganttKey}
             tasks={ganttTasks}
             links={links}
-            scales={scales}
             columns={columns}
             start={chartRange.start}
             end={chartRange.end}
@@ -216,5 +245,6 @@ export function GanttView({
         </Willow>
       </div>
     </div>
+    </GanttChartContext.Provider>
   )
 }

@@ -109,27 +109,27 @@ function calendarScalesForZoom(preset: TimelineZoom): IScaleConfig[] {
   switch (preset) {
     case 'year':
       return [
-        { unit: 'year', step: 1, format: '%Y' },
-        { unit: 'quarter', step: 1, format: 'Q%q' }
+        { unit: 'year', step: 1, format: (date: Date) => format(date, 'yyyy') },
+        { unit: 'quarter', step: 1, format: (date: Date) => `Q${Math.floor(date.getMonth() / 3) + 1}` }
       ]
     case 'month':
       return [
-        { unit: 'year', step: 1, format: '%Y' },
-        { unit: 'month', step: 1, format: '%b' }
+        { unit: 'year', step: 1, format: (date: Date) => format(date, 'yyyy') },
+        { unit: 'month', step: 1, format: (date: Date) => format(date, 'MMM') }
       ]
     case 'week':
       return [
-        { unit: 'month', step: 1, format: '%b %Y' },
-        { unit: 'week', step: 1, format: 'W%W' }
+        { unit: 'month', step: 1, format: (date: Date) => format(date, 'MMM yyyy') },
+        { unit: 'week', step: 1, format: (date: Date) => `W${format(date, 'w')}` }
       ]
     case 'day':
       return [
-        { unit: 'month', step: 1, format: '%b %Y' },
-        { unit: 'day', step: 1, format: '%d' }
+        { unit: 'month', step: 1, format: (date: Date) => format(date, 'MMM yyyy') },
+        { unit: 'day', step: 1, format: (date: Date) => format(date, 'd') }
       ]
     case 'hour':
       return [
-        { unit: 'day', step: 1, format: '%b %d' },
+        { unit: 'day', step: 1, format: (date: Date) => format(date, 'MMM d') },
         {
           unit: 'hour',
           step: 6,

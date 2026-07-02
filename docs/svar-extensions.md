@@ -58,7 +58,9 @@ Custom code queries or styles these SVAR classes:
 
 ## Props we pass to `<Gantt />`
 
-`tasks`, `links`, `scales`, `columns`, `start`, `end`, `zoom`, `autoScale={false}`, `weekStart={1}`, `init`
+`tasks`, `links`, `columns`, `start`, `end`, `zoom`, `autoScale={false}`, `weekStart={1}`, `init`
+
+After init, `lib/gantt/chartViewport.ts` scrolls the chart so SVAR `_visibleLinks` includes dependency geometry (links exist in store but arrows only render inside `xArea`).
 
 Column extensions: `milestone-toggle`, `add-task` (custom React cells).
 

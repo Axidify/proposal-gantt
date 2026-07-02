@@ -738,6 +738,19 @@
   z-index: 9999;
 }
 
+/* FS dependency arrows (distinct from per-bar link handles) */
+.proposal-gantt-theme .wx-links {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.proposal-gantt-theme .wx-links path,
+.proposal-gantt-theme .wx-links line {
+  stroke: #71717a;
+  stroke-width: 1.5;
+  fill: none;
+}
+
 /* Link handles — generous corner hit targets in link mode (keep SVAR absolute positioning) */
 .proposal-gantt-theme:not(.link-mode-active) .wx-link {
   opacity: 0 !important;

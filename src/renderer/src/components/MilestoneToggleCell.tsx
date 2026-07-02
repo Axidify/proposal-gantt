@@ -1,15 +1,14 @@
 import type { MouseEvent } from 'react'
 import { Diamond } from 'lucide-react'
-import type { IApi } from '@svar-ui/react-gantt'
 import type { GanttTask } from '../types'
-import { milestoneTogglePatch } from '../lib/tasks'
+import { useGanttChartContext } from '../context/GanttChartContext'
 
 interface MilestoneToggleCellProps {
   row: Pick<GanttTask, 'id' | 'type' | 'start' | 'duration' | 'progress'>
-  api: IApi
 }
 
-export function MilestoneToggleCell({ row, api }: MilestoneToggleCellProps) {
+export function MilestoneToggleCell({ row }: MilestoneToggleCellProps) {
+  const { onToggleMilestone } = useGanttChartContext()
   if (row.type === 'summary') return null
 
   const isMilestone = row.type === 'milestone'
@@ -17,10 +16,7 @@ export function MilestoneToggleCell({ row, api }: MilestoneToggleCellProps) {
   const toggle = (event: MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
-    void api.exec('update-task', {
-      id: row.id,
-      task: milestoneTogglePatch(row, !isMilestone)
-    })
+    onToggleMilestone(row.id, !isMilestone)
   }
 
   return (

@@ -1,13 +1,15 @@
 import type { MouseEvent } from 'react'
 import { FolderPlus, Plus } from 'lucide-react'
 import type { IApi } from '@svar-ui/react-gantt'
+import { useGanttChartContext } from '../context/GanttChartContext'
 
 interface AddRowCellProps {
   row: { id: number | string; type?: string; parent?: number | string }
   api: IApi
 }
 
-export function AddRowCell({ row, api }: AddRowCellProps) {
+export function AddRowCell({ row }: AddRowCellProps) {
+  const { onAddTask } = useGanttChartContext()
   const isSummary = row.type === 'summary'
 
   const add = (kind: 'task' | 'summary') => (event: MouseEvent) => {
@@ -17,7 +19,7 @@ export function AddRowCell({ row, api }: AddRowCellProps) {
     const isPhase = kind === 'summary'
     const mode = isPhase ? 'after' : isSummary ? 'child' : 'after'
 
-    void api.exec('add-task', {
+    onAddTask({
       target: row.id,
       mode,
       task: {
@@ -26,9 +28,7 @@ export function AddRowCell({ row, api }: AddRowCellProps) {
         duration: isPhase ? 14 : 3,
         progress: 0,
         open: isPhase ? true : undefined
-      },
-      show: true,
-      focus: 'grid'
+      }
     })
   }
 

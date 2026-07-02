@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { IApi } from '@svar-ui/react-gantt'
-import type { GanttLink, GanttTask, TimelineMode } from '../types'
+import type { GanttLink, GanttTask } from '../types'
 import type { GanttChartActions } from '../lib/ganttActions'
 import { addFsDependency, removeFsDependency } from '../lib/dependencies'
 import { fromCalendarTasks, toCalendarTasks, asDate } from '../lib/timeline'
 import { tasksChanged } from '../lib/tasks'
 import { scheduleFromSerializedTasks } from '../lib/gantt/sync'
+import { scheduleChartViewportSync } from '../lib/gantt/chartViewport'
 import {
   registerGanttApiHandlers,
   type ChartData,
@@ -13,6 +14,8 @@ import {
 } from '../lib/gantt/apiHandlers'
 
 interface UseGanttApiOptions {
+  tasks: GanttTask[]
+  links: GanttLink[]
   onTasksChange: (tasks: GanttTask[]) => void
   onLinksChange: (links: GanttLink[]) => void
   onRegisterChartActions?: (actions: GanttChartActions) => void
@@ -20,6 +23,8 @@ interface UseGanttApiOptions {
 }
 
 export function useGanttApi({
+  tasks,
+  links,
   onTasksChange,
   onLinksChange,
   onRegisterChartActions,
@@ -48,6 +53,23 @@ export function useGanttApi({
 
   const setChartData = useCallback((data: ChartData) => {
     dataRef.current = data
+  }, [])
+
+  const refreshChartLayout = useCallback((api: IApi) => {
+    const { tasks: chartTasks, links: chartLinks, timelineMode, projectStartDate } =
+      dataRef.current
+    queueMicrotask(() => {
+      void (async () => {
+        await api.exec('schedule-tasks', {})
+        scheduleChartViewportSync(
+          api,
+          chartTasks,
+          chartLinks,
+          timelineMode,
+          projectStartDate
+        )
+      })()
+    })
   }, [])
 
   const pushTaskUpdatesToChart = useCallback(
@@ -188,9 +210,17 @@ export function useGanttApi({
         onLinksChange: (links) => onLinksChangeRef.current(links),
         syncFromApi
       })
+
+      refreshChartLayout(api)
     },
-    [onLinkMessage, syncFromApi]
+    [onLinkMessage, refreshChartLayout, syncFromApi]
   )
+
+  useEffect(() => {
+    const api = apiRef.current
+    if (!api) return
+    refreshChartLayout(api)
+  }, [tasks, links, refreshChartLayout])
 
   return {
     handleInit,
