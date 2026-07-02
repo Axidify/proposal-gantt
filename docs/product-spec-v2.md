@@ -345,10 +345,10 @@ When nothing is selected, **Task** tab shows empty state: “Select a row to edi
 | D4 | Sample `.pgantt` gallery |
 
 ### Future (v1.1+)
-- Custom template library / org templates  
+- Org-wide template sync / shared template library (beyond local user folder)  
 - Brand kit (logo on export card, custom fonts)  
 - Duplicate proposal / merge timelines  
-- Optional web viewer (read-only share link)  
+- Optional web viewer (read-only share link) — **out of scope for v1.0 (§9)**  
 - SS / FF link types if proposals need them  
 
 ---
@@ -405,15 +405,19 @@ interface ProposalMeta {
 
 ---
 
-## 9. Open questions (decide before Phase B)
+## 9. Product decisions
 
-| # | Question | Options |
-|---|----------|---------|
-| 1 | **Web version** or desktop-only for v1.0? | Desktop first (current) vs Tauri/Electron + web export |
-| 2 | **Summary roll-up** automatic or manual? | Auto from children vs editable override |
-| 3 | **Lag default** when linking? | 0 days vs 1 business day vs “smart gap” |
-| 4 | **Template storage** | Bundled only vs user Templates folder |
-| 5 | **Licensing** | MIT internal vs commercial product |
+All items below were open before Phase B; **all decided 2026-07-01.**
+
+| # | Question | Decision |
+|---|----------|----------|
+| 1 | **Web version** or desktop-only for v1.0? | **Desktop only** — Electron app; no web build or read-only viewer in v1.0 |
+| 2 | **Summary roll-up** automatic or manual? | **Auto from children** — phase/summary start, end, and duration derive from child tasks; no manual override in v1.0 |
+| 3 | **Lag default** when linking? | **0 days** — successor starts the day after predecessor ends (FS, no gap) unless user sets lag later (B5 UI) |
+| 4 | **Template storage** | **User folder** — templates live under the app’s local user-data directory (e.g. `%APPDATA%/Proposal Gantt/Templates` on Windows); bundled starters remain for first-run; users can add/save templates there |
+| 5 | **Licensing** | **None** — free internal use only; not a commercial product; no license enforcement or paid tier in v1.0 |
+
+**Implementation notes:** Roll-up → Phase C2. Zero-day lag on new links → `addFsDependency` + link mode (B5). User template folder → Welcome screen + save-as-template flow (Phase B/D). Web viewer deferred to v1.1+ (§7 Future).
 
 ---
 
@@ -601,6 +605,8 @@ Copy for sprint planning — check off as shipped:
 
 ### 11.9 Recommended next steps (ordered)
 
+**Product decisions (§9):** Desktop only; auto summary roll-up; 0-day lag on new links; templates in local user-data folder; free internal use (no licensing).
+
 1. **Phase A** — `GanttView` split + Vitest + wire `verify-scheduling.ts` → `npm test` + GitHub Actions  
 2. **Phase B1 + B2** — Task inspector + toolbar mode switcher (closes biggest wireframe gap)  
 3. **Phase C3** — Autosave (success metric §4.3)  
@@ -615,6 +621,8 @@ Copy for sprint planning — check off as shipped:
 |------|-------------------|---------|
 | — | `bc7b633` | Initial MVP: Electron, Gantt, FS deps, templates, export |
 | 2026-07-01 | `c31248b` | Layout revamp, inspector tabs, inline edit, milestones, add/reparent, scheduling fixes, zoom/autofit, visual polish, product spec |
+| 2026-07-01 | — | §9 decisions: auto summary roll-up; 0-day default lag on new links |
+| 2026-07-01 | — | §9 closed: desktop-only; user-data template folder; free internal use (no licensing) |
 
 *Add a row here when merging significant work.*
 
